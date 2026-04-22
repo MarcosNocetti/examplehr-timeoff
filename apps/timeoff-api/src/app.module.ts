@@ -5,6 +5,7 @@ import { PrismaModule } from './shared/prisma/prisma.module';
 import { CorrelationMiddleware } from './shared/context/correlation.middleware';
 import { pinoConfig } from './shared/logging/pino.config';
 import { BalancesModule } from './modules/balances/balances.module';
+import { HcmClientModule } from './modules/hcm-client/hcm-client.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { BalancesModule } from './modules/balances/balances.module';
     LoggerModule.forRoot(pinoConfig),
     PrismaModule,
     BalancesModule,
+    HcmClientModule,
   ],
 })
 export class AppModule implements NestModule {
