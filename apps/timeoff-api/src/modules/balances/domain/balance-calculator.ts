@@ -8,9 +8,19 @@ const RESERVATION_TYPES: ReadonlySet<MovementType> = new Set([
   MovementType.CONFIRMED,
 ]);
 
-export function computeAvailable(total: Decimal, movements: readonly MovementForBalance[]): Decimal {
+/** Raw (unclamped) available days — use only for defensive guard checks. */
+export function computeRawAvailable(total: Decimal, movements: readonly MovementForBalance[]): Decimal {
   const reserved = movements
     .filter((m) => RESERVATION_TYPES.has(m.type))
     .reduce((acc, m) => acc.plus(m.delta), new Decimal(0));
-  return total.plus(reserved); // delta is already negative for reservations
+  return total.plus(reserved);
+}
+
+/**
+ * Available days for display and gate-keeping.
+ * Clamped to 0: when HCM sends a lower total than existing reservations the
+ * value must not go negative — the pending saga will settle later.
+ */
+export function computeAvailable(total: Decimal, movements: readonly MovementForBalance[]): Decimal {
+  return Decimal.max(computeRawAvailable(total, movements), new Decimal(0));
 }

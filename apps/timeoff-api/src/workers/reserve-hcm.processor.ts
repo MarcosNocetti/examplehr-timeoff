@@ -7,7 +7,7 @@ import { RequestRepository } from '../modules/requests/request.repository';
 import { MovementRepository } from '../modules/requests/movement.repository';
 import { OutboxRepository } from '../modules/outbox/outbox.repository';
 import { HCM_PORT, HcmPort } from '../modules/hcm-client/hcm.port';
-import { computeAvailable } from '../modules/balances/domain/balance-calculator';
+import { computeAvailable, computeRawAvailable } from '../modules/balances/domain/balance-calculator';
 import { MovementType, SagaState, RequestStatus } from '@examplehr/contracts';
 import { HcmUnavailableError, HcmProtocolViolationError } from '../shared/errors/domain.errors';
 
@@ -65,7 +65,9 @@ export class ReserveHcmProcessor extends WorkerHost {
       const ms = await tx.timeOffMovement.findMany({
         where: { employeeId: payload.employeeId, locationId: payload.locationId },
       });
-      const available = computeAvailable(
+      // Use the raw (unclamped) computation here so that HCM over-acceptance is
+      // detectable even though the presentation layer clamps to 0.
+      const available = computeRawAvailable(
         new Decimal(balance!.totalDays.toString()),
         ms.map((m: any) => ({ delta: new Decimal(m.delta.toString()), type: m.type })),
       );

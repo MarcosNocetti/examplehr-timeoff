@@ -23,4 +23,12 @@ describe('computeAvailable', () => {
     const movements = [{ delta: new Decimal(-3), type: MovementType.PENDING_RESERVATION }];
     expect(computeAvailable(total, movements).toString()).toBe('0');
   });
+
+  it('clamps to 0 when HCM sends a total lower than existing reservations', () => {
+    // Scenario: 1-day reservation pending, then HCM refreshes total to 0.
+    // available = 0 + (-1) = -1 → must be clamped to 0.
+    const total = new Decimal(0);
+    const movements = [{ delta: new Decimal(-1), type: MovementType.PENDING_RESERVATION }];
+    expect(computeAvailable(total, movements).toString()).toBe('0');
+  });
 });
