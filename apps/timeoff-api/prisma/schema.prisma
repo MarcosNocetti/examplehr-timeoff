@@ -1,0 +1,64 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Balance {
+  employeeId    String
+  locationId    String
+  totalDays     Decimal
+  version       Int      @default(1)
+  hcmLastSeenAt DateTime
+  updatedAt     DateTime @updatedAt
+
+  @@id([employeeId, locationId])
+}
+
+model TimeOffMovement {
+  id          String    @id @default(uuid())
+  employeeId  String
+  locationId  String
+  delta       Decimal
+  type        String
+  requestId   String?
+  hcmSyncedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([employeeId, locationId, createdAt])
+  @@index([requestId])
+}
+
+model TimeOffRequest {
+  id             String   @id @default(uuid())
+  employeeId     String
+  locationId     String
+  startDate      DateTime
+  endDate        DateTime
+  days           Decimal
+  status         String
+  sagaState      String
+  idempotencyKey String   @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([employeeId, status])
+}
+
+model OutboxEntry {
+  id            String   @id @default(uuid())
+  aggregateId   String
+  eventType     String
+  payload       String
+  status        String   @default("PENDING")
+  attempts      Int      @default(0)
+  nextAttemptAt DateTime @default(now())
+  lastError     String?
+  createdAt     DateTime @default(now())
+
+  @@index([status, nextAttemptAt])
+  @@index([aggregateId])
+}
