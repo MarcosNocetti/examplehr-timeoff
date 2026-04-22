@@ -13,7 +13,7 @@ export interface TimeOffRequestDto {
   locationId: string;
   startDate: string;
   endDate: string;
-  days: string;
+  days: string; // decimal as string
   status: RequestStatus;
   sagaState: SagaState;
   createdAt: string;
