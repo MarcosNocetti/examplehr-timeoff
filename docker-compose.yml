@@ -32,6 +32,9 @@ services:
       HCM_BASE_URL: "http://hcm-mock:4000"
       HCM_ADAPTER: "http"
       ROLE: "api"
+      # Disable outbox polling on the api container — only the worker container polls.
+      # This prevents 2x outbox poll on the same DB and 2x BullMQ job enqueue.
+      OUTBOX_POLL_DISABLED: "1"
     volumes:
       - api-sqlite:/data
     depends_on:
@@ -40,6 +43,12 @@ services:
       hcm-mock:
         condition: service_started
     ports: ["3000:3000"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 15s
 
   worker:
     build:
@@ -58,6 +67,15 @@ services:
         condition: service_healthy
       hcm-mock:
         condition: service_started
+
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+    ports: ["5173:80"]
+    depends_on:
+      api:
+        condition: service_healthy
 
 volumes:
   api-sqlite:
