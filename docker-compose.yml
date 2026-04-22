@@ -1,0 +1,63 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  hcm-mock:
+    build:
+      context: .
+      dockerfile: apps/hcm-mock/Dockerfile
+    environment:
+      PORT: "4000"
+    ports: ["4000:4000"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/hcm/balances/_/_", "||", "true"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/timeoff-api/Dockerfile
+    environment:
+      PORT: "3000"
+      DATABASE_URL: "file:/data/prod.db?connection_limit=1"
+      REDIS_URL: "redis://redis:6379"
+      HCM_BASE_URL: "http://hcm-mock:4000"
+      HCM_ADAPTER: "http"
+      ROLE: "api"
+    volumes:
+      - api-sqlite:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+      hcm-mock:
+        condition: service_started
+    ports: ["3000:3000"]
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/timeoff-api/Dockerfile
+    environment:
+      DATABASE_URL: "file:/data/prod.db?connection_limit=1"
+      REDIS_URL: "redis://redis:6379"
+      HCM_BASE_URL: "http://hcm-mock:4000"
+      HCM_ADAPTER: "http"
+      ROLE: "worker"
+    volumes:
+      - api-sqlite:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+      hcm-mock:
+        condition: service_started
+
+volumes:
+  api-sqlite:
