@@ -6,6 +6,7 @@ import { CorrelationMiddleware } from './shared/context/correlation.middleware';
 import { pinoConfig } from './shared/logging/pino.config';
 import { BalancesModule } from './modules/balances/balances.module';
 import { HcmClientModule } from './modules/hcm-client/hcm-client.module';
+import { OutboxModule } from './modules/outbox/outbox.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { HcmClientModule } from './modules/hcm-client/hcm-client.module';
     PrismaModule,
     BalancesModule,
     HcmClientModule,
+    OutboxModule,
   ],
 })
 export class AppModule implements NestModule {
