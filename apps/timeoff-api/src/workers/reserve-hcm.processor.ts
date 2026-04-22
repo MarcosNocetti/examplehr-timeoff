@@ -1,5 +1,4 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Inject, Logger } from '@nestjs/common';
+import { Injectable, Inject, Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import Decimal from 'decimal.js';
 import { PrismaService } from '../shared/prisma/prisma.service';
@@ -11,8 +10,8 @@ import { computeAvailable, computeRawAvailable } from '../modules/balances/domai
 import { MovementType, SagaState, RequestStatus } from '@examplehr/contracts';
 import { HcmUnavailableError, HcmProtocolViolationError } from '../shared/errors/domain.errors';
 
-@Processor('hcm-saga', { concurrency: 10 })
-export class ReserveHcmProcessor extends WorkerHost {
+@Injectable()
+export class ReserveHcmProcessor {
   private readonly log = new Logger(ReserveHcmProcessor.name);
 
   constructor(
@@ -21,9 +20,7 @@ export class ReserveHcmProcessor extends WorkerHost {
     private readonly movements: MovementRepository,
     private readonly outbox: OutboxRepository,
     @Inject(HCM_PORT) private readonly hcm: HcmPort,
-  ) {
-    super();
-  }
+  ) {}
 
   async process(job: Job): Promise<void> {
     if (job.name !== 'RESERVE_HCM') return;

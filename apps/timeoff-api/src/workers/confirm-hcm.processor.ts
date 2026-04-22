@@ -1,26 +1,25 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Inject, Logger } from '@nestjs/common';
+import { Injectable, Inject, Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import Decimal from 'decimal.js';
 import { PrismaService } from '../shared/prisma/prisma.service';
 import { RequestRepository } from '../modules/requests/request.repository';
 import { MovementRepository } from '../modules/requests/movement.repository';
+import { BalanceRepository } from '../modules/balances/balance.repository';
 import { HCM_PORT, HcmPort } from '../modules/hcm-client/hcm.port';
 import { MovementType, RequestStatus, SagaState } from '@examplehr/contracts';
 import { HcmUnavailableError } from '../shared/errors/domain.errors';
 
-@Processor('hcm-saga', { concurrency: 10 })
-export class ConfirmHcmProcessor extends WorkerHost {
+@Injectable()
+export class ConfirmHcmProcessor {
   private readonly log = new Logger(ConfirmHcmProcessor.name);
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly requests: RequestRepository,
     private readonly movements: MovementRepository,
+    private readonly balances: BalanceRepository,
     @Inject(HCM_PORT) private readonly hcm: HcmPort,
-  ) {
-    super();
-  }
+  ) {}
 
   async process(job: Job): Promise<void> {
     if (job.name !== 'CONFIRM_HCM') return;
@@ -41,17 +40,30 @@ export class ConfirmHcmProcessor extends WorkerHost {
       throw err;
     }
 
+    // Fetch HCM's post-confirm balance to sync totalDays locally.
+    const hcmBalance = await this.hcm.getBalance(payload.employeeId, payload.locationId);
+
     await this.prisma.$transaction(async (tx) => {
-      // CONFIRMED(-days) records the actual consumption
+      // Update local balance.totalDays to match what HCM reports after deduction.
+      await tx.balance.update({
+        where: { employeeId_locationId: { employeeId: payload.employeeId, locationId: payload.locationId } },
+        data: {
+          totalDays: hcmBalance.totalDays,
+          hcmLastSeenAt: new Date(hcmBalance.hcmTimestamp),
+          version: { increment: 1 },
+        },
+      });
+      // CONFIRMED(+days) releases the PENDING_RESERVATION — net zero in RESERVATION_TYPES.
+      // The actual deduction is captured by the totalDays reduction above.
       await this.movements.create({
         employeeId: req.employeeId,
         locationId: req.locationId,
-        delta: new Decimal(payload.days).negated(),
+        delta: new Decimal(payload.days),
         type: MovementType.CONFIRMED,
         requestId: req.id,
         tx,
       });
-      // CANCELLED(+days) offsets the original PENDING_RESERVATION
+      // CANCELLED(+days) explicitly closes the original PENDING_RESERVATION entry.
       await this.movements.create({
         employeeId: req.employeeId,
         locationId: req.locationId,

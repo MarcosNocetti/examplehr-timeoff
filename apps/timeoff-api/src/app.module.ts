@@ -1,6 +1,8 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino';
+import { BullModule } from '@nestjs/bullmq';
+import IORedis from 'ioredis';
 import { PrismaModule } from './shared/prisma/prisma.module';
 import { CorrelationMiddleware } from './shared/context/correlation.middleware';
 import { pinoConfig } from './shared/logging/pino.config';
@@ -15,6 +17,12 @@ import { HealthModule } from './modules/health/health.module';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     LoggerModule.forRoot(pinoConfig),
+    BullModule.forRoot({
+      connection: new IORedis(process.env.REDIS_URL ?? 'redis://localhost:6379', {
+        maxRetriesPerRequest: null,
+      }),
+    }),
+    BullModule.registerQueue({ name: 'hcm-saga' }),
     PrismaModule,
     BalancesModule,
     HcmClientModule,
