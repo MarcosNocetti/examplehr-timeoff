@@ -1,0 +1,128 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, "impl/**"]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.15.9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build contracts package
+        run: pnpm --filter @examplehr/contracts build
+
+      - name: Generate Prisma client
+        run: pnpm --filter timeoff-api prisma:generate
+
+      - name: Apply migrations to throwaway dev DB
+        run: pnpm --filter timeoff-api prisma migrate deploy
+        env:
+          DATABASE_URL: "file:./dev.db?connection_limit=1"
+
+      - name: Lint
+        run: pnpm lint
+        continue-on-error: true # don't block on style issues
+
+      - name: Unit tests
+        run: pnpm test:unit
+        env:
+          DATABASE_URL: "file:./dev.db?connection_limit=1"
+
+      - name: Integration tests
+        run: pnpm test:integration
+        env:
+          DATABASE_URL: "file:./dev.db?connection_limit=1"
+          REDIS_URL: "redis://localhost:6379"
+
+      - name: Property tests (race + invariant)
+        run: pnpm test:property
+        env:
+          DATABASE_URL: "file:./dev.db?connection_limit=1"
+          REDIS_URL: "redis://localhost:6379"
+
+      - name: Coverage report
+        run: pnpm --filter timeoff-api jest --coverage
+        env:
+          DATABASE_URL: "file:./dev.db?connection_limit=1"
+          REDIS_URL: "redis://localhost:6379"
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: apps/timeoff-api/coverage
+
+  smoke:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.15.9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build contracts package
+        run: pnpm --filter @examplehr/contracts build
+
+      - name: Boot stack via docker compose
+        run: docker compose up -d --build --wait
+
+      - name: Wait for api readiness
+        run: |
+          for i in {1..30}; do
+            if curl -sf http://localhost:3000/health; then echo "api ready"; exit 0; fi
+            sleep 2
+          done
+          echo "api not ready"; docker compose logs api worker hcm-mock; exit 1
+
+      - name: Smoke tests
+        run: pnpm test:smoke
+        env:
+          API_URL: "http://localhost:3000"
+          HCM_URL: "http://localhost:4000"
+
+      - name: Dump container logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
