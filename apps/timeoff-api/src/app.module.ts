@@ -9,6 +9,7 @@ import { HcmClientModule } from './modules/hcm-client/hcm-client.module';
 import { OutboxModule } from './modules/outbox/outbox.module';
 import { RequestsModule } from './modules/requests/requests.module';
 import { ReconciliationModule } from './modules/reconciliation/reconciliation.module';
+import { HealthModule } from './modules/health/health.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { ReconciliationModule } from './modules/reconciliation/reconciliation.mo
     OutboxModule,
     RequestsModule,
     ReconciliationModule,
+    HealthModule,
   ],
 })
 export class AppModule implements NestModule {
