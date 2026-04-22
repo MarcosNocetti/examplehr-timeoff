@@ -10,9 +10,11 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const ctx = host.switchToHttp();
     const res = ctx.getResponse<Response>();
     const req = ctx.getRequest<Request>();
+    const headerStr = (h: string | string[] | undefined): string | undefined =>
+      Array.isArray(h) ? h[0] : h;
     const correlationId =
       currentCtx()?.correlationId
-      ?? (req.headers['x-correlation-id'] as string)
+      ?? headerStr(req.headers['x-correlation-id'])
       ?? 'n/a';
 
     if (ex instanceof DomainError) {
