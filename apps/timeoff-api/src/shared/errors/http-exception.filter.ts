@@ -1,6 +1,7 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, Logger } from '@nestjs/common';
 import { Response, Request } from 'express';
 import { DomainError } from './domain-error';
+import { currentCtx } from '../context/request-context';
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
@@ -9,7 +10,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const ctx = host.switchToHttp();
     const res = ctx.getResponse<Response>();
     const req = ctx.getRequest<Request>();
-    const correlationId = (req.headers['x-correlation-id'] as string) ?? 'n/a';
+    const correlationId =
+      currentCtx()?.correlationId
+      ?? (req.headers['x-correlation-id'] as string)
+      ?? 'n/a';
 
     if (ex instanceof DomainError) {
       if (ex.httpStatus >= 500) {
