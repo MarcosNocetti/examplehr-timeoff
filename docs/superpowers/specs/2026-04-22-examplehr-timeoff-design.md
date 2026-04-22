@@ -510,9 +510,11 @@ Use `SELECT FOR UPDATE` exclusively, no version field.
 | `redis` | `redis:7-alpine` | No persistence (cache for queue) |
 | `hcm-mock` | local build of `apps/hcm-mock` | Port 4000, exposes admin hooks for tests |
 
-`package.json` scripts provide cross-platform commands: `up`, `down`, `logs`,
-`test:unit`, `test:integration`, `test:smoke`, `test:property`, `test:e2e`, `seed`.
-(No Makefile, since the project must run on Windows by default.)
+`package.json` scripts (run via `pnpm <script>`) provide all developer commands:
+`up`, `down`, `logs`, `test:unit`, `test:integration`, `test:smoke`, `test:property`,
+`test:e2e`, `seed`. These are cross-platform by construction (pnpm runs on Linux,
+macOS, and Windows). No Makefile is added — it would be a redundant second surface
+for the same commands and a potential source of drift between the two.
 
 ---
 
