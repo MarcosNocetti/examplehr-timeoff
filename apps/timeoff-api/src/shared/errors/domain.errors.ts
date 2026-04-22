@@ -20,9 +20,16 @@ export class InvalidStateTransitionError extends DomainError {
   }
 }
 
+/**
+ * Thrown when a request with an existing idempotencyKey is submitted again.
+ * The HTTP filter responds with 200 (NOT a 4xx) because the contract is
+ * idempotent-replay: the caller gets back the prior result, not an error.
+ * Any catch-block that aggregates DomainError for alerting should explicitly
+ * skip this class.
+ */
 export class DuplicateIdempotencyKeyError extends DomainError {
   readonly code = 'DUPLICATE_IDEMPOTENCY_KEY';
-  readonly httpStatus = 200; // returns existing entity, not an error to client
+  readonly httpStatus = 200;
   readonly detail = 'Returning existing request with same idempotencyKey.';
   constructor() { super('Duplicate idempotency key'); }
 }

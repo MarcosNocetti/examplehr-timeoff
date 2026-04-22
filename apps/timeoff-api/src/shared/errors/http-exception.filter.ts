@@ -12,8 +12,11 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const correlationId = (req.headers['x-correlation-id'] as string) ?? 'n/a';
 
     if (ex instanceof DomainError) {
+      if (ex.httpStatus >= 500) {
+        this.log.error(`[${ex.code}] ${ex.message} correlationId=${correlationId}`);
+      }
       res.status(ex.httpStatus).json({
-        type: `https://examplehr/errors/${ex.code.toLowerCase()}`,
+        type: `https://examplehr/errors/${ex.code.toLowerCase().replace(/_/g, '-')}`,
         title: ex.message,
         detail: ex.detail,
         code: ex.code,
