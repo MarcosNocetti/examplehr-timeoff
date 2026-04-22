@@ -7,6 +7,7 @@ import { pinoConfig } from './shared/logging/pino.config';
 import { BalancesModule } from './modules/balances/balances.module';
 import { HcmClientModule } from './modules/hcm-client/hcm-client.module';
 import { OutboxModule } from './modules/outbox/outbox.module';
+import { RequestsModule } from './modules/requests/requests.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { OutboxModule } from './modules/outbox/outbox.module';
     BalancesModule,
     HcmClientModule,
     OutboxModule,
+    RequestsModule,
   ],
 })
 export class AppModule implements NestModule {
