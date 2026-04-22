@@ -7,8 +7,8 @@ import { BalanceRepository } from '../balances/balance.repository';
 import { OutboxService } from '../outbox/outbox.service';
 import { computeAvailable } from '../balances/domain/balance-calculator';
 import { computeDays, assertSufficient } from './domain/request-validator';
-import { MovementType } from '@examplehr/contracts';
-import { NotFoundError } from '../../shared/errors/domain.errors';
+import { MovementType, SagaState, RequestStatus } from '@examplehr/contracts';
+import { NotFoundError, InvalidStateTransitionError } from '../../shared/errors/domain.errors';
 
 export interface CreateInput {
   employeeId: string;
@@ -84,6 +84,72 @@ export class RequestsService {
       });
 
       return created;
+    });
+  }
+
+  async findById(id: string) {
+    return this.requests.findById(id);
+  }
+
+  async list(filter: { employeeId?: string; status?: RequestStatus }) {
+    return this.requests.list(filter);
+  }
+
+  async approve(id: string) {
+    return this.transitionWithOutbox(id, 'CONFIRM_HCM', SagaState.COMMITTING_HCM, {});
+  }
+
+  async reject(id: string, reason?: string) {
+    return this.transitionWithOutbox(id, 'COMPENSATE_HCM', SagaState.COMPENSATING_HCM, {
+      intendedTerminalStatus: RequestStatus.REJECTED,
+      reason,
+    });
+  }
+
+  async cancel(id: string) {
+    return this.transitionWithOutbox(id, 'COMPENSATE_HCM', SagaState.COMPENSATING_HCM, {
+      intendedTerminalStatus: RequestStatus.CANCELLED,
+    });
+  }
+
+  async forceFail(id: string, reason: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const req = await tx.timeOffRequest.findUnique({ where: { id } });
+      if (!req) throw new NotFoundError(`TimeOffRequest ${id}`);
+      await this.movements.create({
+        employeeId: req.employeeId,
+        locationId: req.locationId,
+        delta: new Decimal(req.days.toString()),
+        type: MovementType.CANCELLED,
+        requestId: req.id,
+        tx,
+      });
+      await this.requests.transition(req.id, RequestStatus.FAILED, SagaState.TERMINAL, tx);
+      return { id: req.id, reason };
+    });
+  }
+
+  private async transitionWithOutbox(
+    id: string,
+    eventType: 'CONFIRM_HCM' | 'COMPENSATE_HCM',
+    nextSaga: SagaState,
+    payloadExtra: Record<string, unknown>,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const req = await tx.timeOffRequest.findUnique({ where: { id } });
+      if (!req) throw new NotFoundError(`TimeOffRequest ${id}`);
+      if (req.sagaState !== SagaState.AWAITING_APPROVAL) {
+        throw new InvalidStateTransitionError(req.sagaState, nextSaga);
+      }
+      await this.requests.transition(id, RequestStatus.PENDING_APPROVAL, nextSaga, tx);
+      await this.outbox.enqueueInTx(tx, id, eventType, {
+        reservationId: id,
+        employeeId: req.employeeId,
+        locationId: req.locationId,
+        days: req.days.toString(),
+        ...payloadExtra,
+      });
+      return await this.requests.findById(id, tx);
     });
   }
 }
