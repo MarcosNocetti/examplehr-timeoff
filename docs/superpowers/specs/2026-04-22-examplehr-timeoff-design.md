@@ -44,7 +44,7 @@ SSO, and multi-tenant isolation are explicitly out of scope.
 - **FR-1.1** Return current balance per `(employeeId, locationId)`, derived as
   `totalDays − sum(pending + confirmed movements)`.
 - **FR-1.2** Allow `?strategy=fresh` to force a synchronous HCM lookup before
-  returning, used by managers before approving large requests.
+  returning, used by managers before approving large requests. *(deferred — see §12)*
 
 ### FR-2 — Request lifecycle
 - **FR-2.1** Employee creates a request with `{locationId, startDate, endDate, idempotencyKey}`.
@@ -528,3 +528,7 @@ for the same commands and a potential source of drift between the two.
 - Notification channels (email, push) on approval.
 - I18n, accessibility.
 - Production-grade secrets management (env vars only).
+- `GET /balances/:id?strategy=fresh` — force-refresh from HCM before responding. Out of scope: the regular path returns derived `available` quickly; force-refresh adds latency for marginal correctness benefit (the realtime webhook + reconciliation already keeps `total` close to HCM).
+- No-overlap validation — a request that overlaps an existing APPROVED request is currently accepted at the API layer (HCM may accept or reject independently). A production system would enforce this in `request-validator.ts`.
+- `/metrics` Prometheus exposition — the `nestjs-prometheus` package was deferred. The plan defines the metric set (`outbox_pending_total`, `saga_duration_seconds_bucket`, `hcm_request_total`, `drift_events_total`) but they are not currently exported.
+- Per-module Jest coverage thresholds (NFR-5 specified `domain ≥ 95%`, `application ≥ 90%`, `infrastructure ≥ 80%`) — current `jest.config.ts` enforces only a single global threshold. Splitting requires per-folder `coverageThreshold` keys, deferred to CI maturity work.
