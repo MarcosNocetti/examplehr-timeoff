@@ -8,6 +8,7 @@ export const OUTBOX_QUEUE = Symbol('OUTBOX_QUEUE');
 export class OutboxDispatcher implements OnModuleInit, OnModuleDestroy {
   private readonly log = new Logger(OutboxDispatcher.name);
   private timer: NodeJS.Timeout | null = null;
+  private reaperTimer: NodeJS.Timeout | null = null;
   private running = false;
 
   constructor(
@@ -16,15 +17,35 @@ export class OutboxDispatcher implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit() {
+    // OUTBOX_POLL_DISABLED=1 is set on the api container (ROLE=api) so only
+    // the worker container polls the outbox and runs the reaper.
     if (process.env.OUTBOX_POLL_DISABLED === '1') return;
     const intervalMs = Number(process.env.OUTBOX_POLL_MS ?? 500);
     this.timer = setInterval(() => void this.tick(), intervalMs);
+
+    const reapMs = Number(process.env.OUTBOX_REAP_MS ?? 60_000);        // run every 1 min
+    const reapStuckForMs = Number(process.env.OUTBOX_STUCK_MS ?? 300_000); // re-arm after 5 min
+    this.reaperTimer = setInterval(() => void this.reap(reapStuckForMs), reapMs);
   }
 
   onModuleDestroy() {
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
+    }
+    if (this.reaperTimer) {
+      clearInterval(this.reaperTimer);
+      this.reaperTimer = null;
+    }
+  }
+
+  /** Reaper: re-arm DISPATCHED entries stuck longer than stuckForMs. */
+  async reap(stuckForMs: number): Promise<void> {
+    try {
+      const count = await this.repo.reapStuckDispatched(stuckForMs);
+      if (count > 0) this.log.warn({ count, stuckForMs }, 'Re-armed stuck DISPATCHED outbox entries');
+    } catch (err) {
+      this.log.error('outbox reap failed', err as Error);
     }
   }
 

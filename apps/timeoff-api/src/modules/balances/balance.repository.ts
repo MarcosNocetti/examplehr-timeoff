@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../shared/prisma/prisma.service';
+import { OptimisticLockError } from '../../shared/errors/domain.errors';
 import Decimal from 'decimal.js';
 
 export interface BalanceRow {
@@ -52,14 +53,21 @@ export class BalanceRepository {
         return 'CREATED';
       }
       if (input.hcmTimestamp <= existing.hcmLastSeenAt) return 'SKIPPED_STALE';
-      await tx.balance.update({
-        where: { employeeId_locationId: { employeeId: input.employeeId, locationId: input.locationId } },
+      const updateResult = await tx.balance.updateMany({
+        where: {
+          employeeId: input.employeeId,
+          locationId: input.locationId,
+          version: existing.version,  // optimistic check: WHERE version = ?
+        },
         data: {
           totalDays: input.totalDays.toString(),
           hcmLastSeenAt: input.hcmTimestamp,
           version: { increment: 1 },
         },
       });
+      if (updateResult.count === 0) {
+        throw new OptimisticLockError();
+      }
       return 'UPDATED';
     });
   }

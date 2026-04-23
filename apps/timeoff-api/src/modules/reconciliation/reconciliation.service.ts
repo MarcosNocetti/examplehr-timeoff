@@ -5,6 +5,7 @@ import { PrismaService } from '../../shared/prisma/prisma.service';
 import { MovementRepository } from '../requests/movement.repository';
 import { decideMerge } from './domain/reconciliation-merger';
 import { MovementType, HcmBatchPayload, HcmRealtimeDelta } from '@examplehr/contracts';
+import { OptimisticLockError } from '../../shared/errors/domain.errors';
 import Decimal from 'decimal.js';
 import { randomUUID } from 'crypto';
 
@@ -54,14 +55,21 @@ export class ReconciliationService {
         if (!decision.shouldUpdate) return;
 
         if (current) {
-          await tx.balance.update({
-            where: { employeeId_locationId: { employeeId: row.employeeId, locationId: row.locationId } },
+          const updateResult = await tx.balance.updateMany({
+            where: {
+              employeeId: row.employeeId,
+              locationId: row.locationId,
+              version: current.version,  // optimistic check: WHERE version = ?
+            },
             data: {
               totalDays: row.totalDays,
               hcmLastSeenAt: new Date(row.hcmTimestamp),
               version: { increment: 1 },
             },
           });
+          if (updateResult.count === 0) {
+            throw new OptimisticLockError();
+          }
         } else {
           await tx.balance.create({
             data: {

@@ -89,6 +89,25 @@ export class OutboxRepository {
     });
   }
 
+  /**
+   * Re-arm DISPATCHED entries that have been stuck for longer than the threshold.
+   * Used by the reaper: if the process crashed between marking DISPATCHED and
+   * calling queue.add, the entry would be stuck forever without this.
+   *
+   * Returns the number of entries re-armed.
+   */
+  async reapStuckDispatched(stuckForMs: number): Promise<number> {
+    const cutoff = new Date(Date.now() - stuckForMs);
+    // We use updatedAt (Prisma auto-tracks it on every update including the
+    // claim that set status=DISPATCHED). Could also use a dedicated dispatchedAt
+    // column for clarity, but reusing updatedAt avoids a schema migration.
+    const result = await this.prisma.outboxEntry.updateMany({
+      where: { status: 'DISPATCHED', updatedAt: { lt: cutoff } },
+      data: { status: 'PENDING' },
+    });
+    return result.count;
+  }
+
   private toRow(r: any): OutboxRow {
     return {
       id: r.id,

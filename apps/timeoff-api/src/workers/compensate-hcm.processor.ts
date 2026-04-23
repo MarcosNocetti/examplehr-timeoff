@@ -37,13 +37,25 @@ export class CompensateHcmProcessor {
       return;
     }
 
-    try {
-      await this.hcm.release({ reservationId: payload.reservationId });
-    } catch (err: any) {
-      if (err instanceof HcmUnavailableError) throw err;
-      // For compensation, even if HCM 4xx (e.g., reservation not found in HCM),
-      // we still want to release locally. Log + continue.
-      this.log.warn({ requestId: aggregateId, error: err.message }, 'HCM release error (continuing)');
+    // Idempotency check: if a CANCELLED movement with a positive delta (release)
+    // already exists for this request, hcm.release was already called on a prior
+    // attempt. Skip the HCM call to avoid double-releasing the reservation.
+    const existingMovements = await this.movements.listByRequestId(req.id);
+    const alreadyReleasedInHcm = existingMovements.some(
+      (m) => m.type === MovementType.CANCELLED && m.delta.greaterThan(0),
+    );
+
+    if (!alreadyReleasedInHcm) {
+      try {
+        await this.hcm.release({ reservationId: payload.reservationId });
+      } catch (err: any) {
+        if (err instanceof HcmUnavailableError) throw err;
+        // For compensation, even if HCM 4xx (e.g., reservation not found in HCM),
+        // we still want to release locally. Log + continue.
+        this.log.warn({ requestId: aggregateId, error: err.message }, 'HCM release error (continuing)');
+      }
+    } else {
+      this.log.log({ requestId: aggregateId }, 'Compensate job replay — skipping HCM release (already released)');
     }
 
     await this.prisma.$transaction(async (tx) => {

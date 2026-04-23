@@ -58,7 +58,9 @@ model OutboxEntry {
   nextAttemptAt DateTime @default(now())
   lastError     String?
   createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([status, nextAttemptAt])
   @@index([aggregateId])
+  @@index([status, updatedAt])
 }
