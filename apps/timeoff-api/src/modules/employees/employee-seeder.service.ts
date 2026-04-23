@@ -10,7 +10,21 @@ export class EmployeeSeederService implements OnApplicationBootstrap {
 
   async onApplicationBootstrap() {
     if (process.env.SKIP_SEED === '1') return;
-    const existing = await this.repo.listAll();
+    // Be defensive: a fresh Test.createTestingModule() may hit this hook before
+    // migrations are applied (e.g., test suites that override PrismaService with
+    // createTestDb() do the migration themselves, but the AppModule-level Prisma
+    // still points at the default DATABASE_URL which may or may not be migrated).
+    // Swallow "table doesn't exist" instead of crashing AppModule boot.
+    let existing;
+    try {
+      existing = await this.repo.listAll();
+    } catch (err: any) {
+      if (String(err?.message ?? err).includes('does not exist')) {
+        this.log.warn('Employee seed skipped — table not yet migrated in this context.');
+        return;
+      }
+      throw err;
+    }
     if (existing.length > 0) {
       this.log.log(`Employee seed skipped — ${existing.length} record(s) already exist.`);
       return;

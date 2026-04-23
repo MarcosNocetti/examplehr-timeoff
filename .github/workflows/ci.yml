@@ -43,10 +43,12 @@ jobs:
         run: pnpm --filter hcm-mock build
 
       - name: Generate Prisma client
-        run: pnpm --filter timeoff-api prisma:generate
+        run: pnpm --filter timeoff-api run prisma:generate
 
-      - name: Apply migrations to throwaway dev DB
-        run: pnpm --filter timeoff-api prisma migrate deploy
+      - name: Apply migrations to dev DB
+        # `prisma:deploy` is the package.json script; without `run` pnpm
+        # would try to match "prisma" as a script name and silently exit 0.
+        run: pnpm --filter timeoff-api run prisma:deploy
         env:
           DATABASE_URL: "file:./dev.db?connection_limit=1"
 
