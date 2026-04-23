@@ -35,17 +35,19 @@ export class RequestsController {
     @Query('status') status: RequestStatus | undefined,
     @CurrentUser() user: CurrentUserPayload,
   ) {
+    let rows;
     if (user.role === Role.EMPLOYEE) {
-      return this.svc.list({ employeeId: user.employeeId, status });
-    }
-    if (user.role === Role.MANAGER) {
+      rows = await this.svc.list({ employeeId: user.employeeId, status });
+    } else if (user.role === Role.MANAGER) {
       const team = await this.employees.listTeamOf(user.employeeId);
       const teamIds = new Set([user.employeeId, ...team.map((m) => m.id)]);
       const all = await this.svc.list({ status });
-      return all.filter((r) => teamIds.has(r.employeeId));
+      rows = all.filter((r) => teamIds.has(r.employeeId));
+    } else {
+      // admin
+      rows = await this.svc.list({ status });
     }
-    // admin: no restriction
-    return this.svc.list({ status });
+    return this.enrichWithEmployeeName(rows);
   }
 
   @Get(':id')
@@ -56,7 +58,17 @@ export class RequestsController {
     if (user.role === Role.EMPLOYEE && r.employeeId !== user.employeeId) {
       throw new ForbiddenError();
     }
-    return r;
+    const [enriched] = await this.enrichWithEmployeeName([r]);
+    return enriched;
+  }
+
+  /** Adds employeeName to each request row via a single batched lookup. */
+  private async enrichWithEmployeeName<T extends { employeeId: string }>(
+    rows: T[],
+  ): Promise<Array<T & { employeeName: string | null }>> {
+    if (rows.length === 0) return [];
+    const nameById = await this.employees.nameMapByIds(rows.map((r) => r.employeeId));
+    return rows.map((r) => ({ ...r, employeeName: nameById.get(r.employeeId) ?? null }));
   }
 
   @Post(':id/approve')
