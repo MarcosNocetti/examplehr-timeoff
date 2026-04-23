@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api';
 import { useIdentity } from '../auth';
 import RequestList from '../components/RequestList';
+import EmployeeAutocomplete from '../components/EmployeeAutocomplete';
 
 // IPv4 — see comment in api.ts about Docker Desktop / browser localhost issue.
 const HCM_ADMIN_BASE = (import.meta as any).env?.VITE_HCM_URL ?? 'http://127.0.0.1:4000';
@@ -164,12 +165,13 @@ export default function AdminPage() {
             <option value="manager">manager</option>
             <option value="admin">admin</option>
           </select>
-          <select value={newManager} onChange={(e) => setNewManager(e.target.value)} className="border border-slate-300 rounded px-2 py-1 text-sm">
-            <option value="">(no manager)</option>
-            {empListQ.data?.filter((e) => e.role === 'manager' || e.role === 'admin').map((m) => (
-              <option key={m.id} value={m.id}>{m.name} ({m.role})</option>
-            ))}
-          </select>
+          <EmployeeAutocomplete
+            value={newManager}
+            onChange={setNewManager}
+            employees={empListQ.data}
+            rolesFilter={['manager', 'admin']}
+            placeholder="Manager (search by name, optional)"
+          />
           <button type="submit" disabled={createEmpMut.isPending} className="bg-slate-900 text-white text-sm px-4 py-2 rounded-md disabled:opacity-50">
             {createEmpMut.isPending ? '…' : 'Create'}
           </button>
@@ -202,10 +204,15 @@ export default function AdminPage() {
         <h2 className="text-lg font-semibold mb-2">1. Seed HCM mock</h2>
         <p className="text-xs text-slate-500 mb-2">Sets initial balance in the HCM mock (server-side only — local DB not touched).</p>
         <div className="bg-white border border-slate-200 rounded-md p-4 grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
-          <input value={seedEmp} onChange={(e) => setSeedEmp(e.target.value)} placeholder="employeeId" className="border border-slate-300 rounded px-2 py-1" />
-          <input value={seedLoc} onChange={(e) => setSeedLoc(e.target.value)} placeholder="locationId" className="border border-slate-300 rounded px-2 py-1" />
-          <input value={seedTotal} onChange={(e) => setSeedTotal(e.target.value)} placeholder="totalDays" className="border border-slate-300 rounded px-2 py-1" />
-          <button onClick={() => seedMut.mutate()} disabled={seedMut.isPending} className="bg-slate-900 text-white text-sm px-4 py-2 rounded-md disabled:opacity-50">
+          <EmployeeAutocomplete
+            value={seedEmp}
+            onChange={setSeedEmp}
+            employees={empListQ.data}
+            placeholder="Employee (search by name)"
+          />
+          <input value={seedLoc} onChange={(e) => setSeedLoc(e.target.value)} placeholder="locationId" className="border border-slate-300 rounded px-2 py-1 text-sm" />
+          <input value={seedTotal} onChange={(e) => setSeedTotal(e.target.value)} placeholder="totalDays" className="border border-slate-300 rounded px-2 py-1 text-sm" />
+          <button onClick={() => seedMut.mutate()} disabled={seedMut.isPending || !seedEmp} className="bg-slate-900 text-white text-sm px-4 py-2 rounded-md disabled:opacity-50">
             {seedMut.isPending ? '…' : 'Seed HCM'}
           </button>
         </div>
@@ -215,10 +222,15 @@ export default function AdminPage() {
         <h2 className="text-lg font-semibold mb-2">2. Push realtime balance to API</h2>
         <p className="text-xs text-slate-500 mb-2">Simulates HCM webhook telling the API the new total. This is what makes the balance show up in /employee.</p>
         <div className="bg-white border border-slate-200 rounded-md p-4 grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
-          <input value={rtEmp} onChange={(e) => setRtEmp(e.target.value)} placeholder="employeeId" className="border border-slate-300 rounded px-2 py-1" />
-          <input value={rtLoc} onChange={(e) => setRtLoc(e.target.value)} placeholder="locationId" className="border border-slate-300 rounded px-2 py-1" />
-          <input value={rtTotal} onChange={(e) => setRtTotal(e.target.value)} placeholder="newTotal" className="border border-slate-300 rounded px-2 py-1" />
-          <button onClick={() => realtimeMut.mutate()} disabled={realtimeMut.isPending} className="bg-slate-900 text-white text-sm px-4 py-2 rounded-md disabled:opacity-50">
+          <EmployeeAutocomplete
+            value={rtEmp}
+            onChange={setRtEmp}
+            employees={empListQ.data}
+            placeholder="Employee (search by name)"
+          />
+          <input value={rtLoc} onChange={(e) => setRtLoc(e.target.value)} placeholder="locationId" className="border border-slate-300 rounded px-2 py-1 text-sm" />
+          <input value={rtTotal} onChange={(e) => setRtTotal(e.target.value)} placeholder="newTotal" className="border border-slate-300 rounded px-2 py-1 text-sm" />
+          <button onClick={() => realtimeMut.mutate()} disabled={realtimeMut.isPending || !rtEmp} className="bg-slate-900 text-white text-sm px-4 py-2 rounded-md disabled:opacity-50">
             {realtimeMut.isPending ? '…' : 'Push to API'}
           </button>
         </div>
