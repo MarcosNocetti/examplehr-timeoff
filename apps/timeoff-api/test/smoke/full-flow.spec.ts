@@ -105,10 +105,12 @@ describe('Full flow smoke', () => {
     const afterReserve: any[] = await fetch(`${API}/balances/${SMOKE_EMPLOYEE}`, { headers: employee(SMOKE_EMPLOYEE) }).then((r) => r.json() as Promise<any[]>);
     expect(afterReserve[0]?.availableDays).toBe('7');
 
-    // 7. Manager approves
+    // 7. Admin approves (admin bypasses the manager team-membership check —
+    //    the smoke test uses a synthetic employeeId that isn't in the Employee
+    //    table, so no real manager is linked to it)
     await fetch(`${API}/requests/${created.id}/approve`, {
       method: 'POST',
-      headers: manager(),
+      headers: admin(),
     }).then((r) => expect([200, 201]).toContain(r.status));
 
     // 8. Wait for confirm to land — request becomes APPROVED
