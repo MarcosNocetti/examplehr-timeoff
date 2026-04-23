@@ -3,7 +3,7 @@ import { AppModule } from '../../../src/app.module';
 import { PrismaService } from '../../../src/shared/prisma/prisma.service';
 import { HcmInMemoryAdapter } from '../../../src/modules/hcm-client/hcm-in-memory.adapter';
 import { HCM_PORT } from '../../../src/modules/hcm-client/hcm.port';
-import { ReserveHcmProcessor } from '../../../src/workers/reserve-hcm.processor';
+import { HcmSagaProcessor } from '../../../src/workers/hcm-saga.processor';
 import { RequestsService } from '../../../src/modules/requests/requests.service';
 import { SagaState, RequestStatus, MovementType } from '@examplehr/contracts';
 import { INestApplication } from '@nestjs/common';
@@ -14,7 +14,7 @@ describe('ReserveHcmProcessor (integration)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let svc: RequestsService;
-  let proc: ReserveHcmProcessor;
+  let proc: HcmSagaProcessor;
   let hcm: HcmInMemoryAdapter;
 
   beforeAll(async () => {
@@ -25,7 +25,7 @@ describe('ReserveHcmProcessor (integration)', () => {
     await app.init();
     prisma = app.get(PrismaService);
     svc = app.get(RequestsService);
-    proc = app.get(ReserveHcmProcessor);
+    proc = app.get(HcmSagaProcessor);
     hcm = app.get(HCM_PORT) as HcmInMemoryAdapter;
   });
 

@@ -3,9 +3,7 @@ import { Test } from '@nestjs/testing';
 import { AppModule } from '../../src/app.module';
 import { PrismaService } from '../../src/shared/prisma/prisma.service';
 import { RequestsService } from '../../src/modules/requests/requests.service';
-import { ReserveHcmProcessor } from '../../src/workers/reserve-hcm.processor';
-import { ConfirmHcmProcessor } from '../../src/workers/confirm-hcm.processor';
-import { CompensateHcmProcessor } from '../../src/workers/compensate-hcm.processor';
+import { HcmSagaProcessor } from '../../src/workers/hcm-saga.processor';
 import { HcmInMemoryAdapter } from '../../src/modules/hcm-client/hcm-in-memory.adapter';
 import { HCM_PORT } from '../../src/modules/hcm-client/hcm.port';
 import { BalancesService } from '../../src/modules/balances/balances.service';
@@ -32,9 +30,7 @@ describe('Available balance invariant (property)', () => {
   let svc: RequestsService;
   let balances: BalancesService;
   let recon: ReconciliationService;
-  let reserve: ReserveHcmProcessor;
-  let confirm: ConfirmHcmProcessor;
-  let compensate: CompensateHcmProcessor;
+  let saga: HcmSagaProcessor;
   let hcm: HcmInMemoryAdapter;
 
   beforeAll(async () => {
@@ -47,9 +43,7 @@ describe('Available balance invariant (property)', () => {
     svc = app.get(RequestsService);
     balances = app.get(BalancesService);
     recon = app.get(ReconciliationService);
-    reserve = app.get(ReserveHcmProcessor);
-    confirm = app.get(ConfirmHcmProcessor);
-    compensate = app.get(CompensateHcmProcessor);
+    saga = app.get(HcmSagaProcessor);
     hcm = app.get(HCM_PORT) as HcmInMemoryAdapter;
   });
 
@@ -87,7 +81,7 @@ describe('Available balance invariant (property)', () => {
                   endDate: new Date(2026, 4, a.days),
                   idempotencyKey: `k${i++}`,
                 });
-                await reserve.process({
+                await saga.process({
                   name: 'RESERVE_HCM',
                   data: {
                     aggregateId: r.id,
@@ -106,7 +100,7 @@ describe('Available balance invariant (property)', () => {
                 const entry = pendingApprovalEntries.shift();
                 if (!entry) break;
                 await svc.approve(entry.id);
-                await confirm.process({
+                await saga.process({
                   name: 'CONFIRM_HCM',
                   data: {
                     aggregateId: entry.id,
@@ -121,7 +115,7 @@ describe('Available balance invariant (property)', () => {
                 if (!entry) break;
                 if (a.kind === 'reject') await svc.reject(entry.id);
                 else await svc.cancel(entry.id);
-                await compensate.process({
+                await saga.process({
                   name: 'COMPENSATE_HCM',
                   data: {
                     aggregateId: entry.id,

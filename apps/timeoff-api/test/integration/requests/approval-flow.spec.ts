@@ -4,9 +4,7 @@ import { PrismaService } from '../../../src/shared/prisma/prisma.service';
 import { HcmInMemoryAdapter } from '../../../src/modules/hcm-client/hcm-in-memory.adapter';
 import { HCM_PORT } from '../../../src/modules/hcm-client/hcm.port';
 import { RequestsService } from '../../../src/modules/requests/requests.service';
-import { ReserveHcmProcessor } from '../../../src/workers/reserve-hcm.processor';
-import { ConfirmHcmProcessor } from '../../../src/workers/confirm-hcm.processor';
-import { CompensateHcmProcessor } from '../../../src/workers/compensate-hcm.processor';
+import { HcmSagaProcessor } from '../../../src/workers/hcm-saga.processor';
 import { RequestStatus, SagaState, MovementType } from '@examplehr/contracts';
 import { INestApplication } from '@nestjs/common';
 
@@ -16,9 +14,7 @@ describe('Approval lifecycle (integration)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let svc: RequestsService;
-  let reserve: ReserveHcmProcessor;
-  let confirm: ConfirmHcmProcessor;
-  let compensate: CompensateHcmProcessor;
+  let saga: HcmSagaProcessor;
   let hcm: HcmInMemoryAdapter;
 
   beforeAll(async () => {
@@ -29,9 +25,7 @@ describe('Approval lifecycle (integration)', () => {
     await app.init();
     prisma = app.get(PrismaService);
     svc = app.get(RequestsService);
-    reserve = app.get(ReserveHcmProcessor);
-    confirm = app.get(ConfirmHcmProcessor);
-    compensate = app.get(CompensateHcmProcessor);
+    saga = app.get(HcmSagaProcessor);
     hcm = app.get(HCM_PORT) as HcmInMemoryAdapter;
   });
 
@@ -50,7 +44,7 @@ describe('Approval lifecycle (integration)', () => {
   });
 
   async function runReserveJob(reqId: string, days: string) {
-    await reserve.process(fakeJob('RESERVE_HCM', {
+    await saga.process(fakeJob('RESERVE_HCM', {
       aggregateId: reqId,
       payload: { employeeId: 'e1', locationId: 'l1', days, reservationId: reqId },
       outboxId: 'o',
@@ -65,7 +59,7 @@ describe('Approval lifecycle (integration)', () => {
     });
     await runReserveJob(r.id, '3');
     await svc.approve(r.id);
-    await confirm.process(fakeJob('CONFIRM_HCM', {
+    await saga.process(fakeJob('CONFIRM_HCM', {
       aggregateId: r.id,
       payload: { reservationId: r.id, employeeId: 'e1', locationId: 'l1', days: '3' },
     }));
@@ -94,7 +88,7 @@ describe('Approval lifecycle (integration)', () => {
     });
     await runReserveJob(r.id, '3');
     await svc.reject(r.id, 'no');
-    await compensate.process(fakeJob('COMPENSATE_HCM', {
+    await saga.process(fakeJob('COMPENSATE_HCM', {
       aggregateId: r.id,
       payload: {
         reservationId: r.id, employeeId: 'e1', locationId: 'l1', days: '3',
@@ -122,7 +116,7 @@ describe('Approval lifecycle (integration)', () => {
     });
     await runReserveJob(r.id, '1');
     await svc.cancel(r.id);
-    await compensate.process(fakeJob('COMPENSATE_HCM', {
+    await saga.process(fakeJob('COMPENSATE_HCM', {
       aggregateId: r.id,
       payload: {
         reservationId: r.id, employeeId: 'e1', locationId: 'l1', days: '1',

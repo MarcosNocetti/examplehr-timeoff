@@ -4,7 +4,7 @@ import { PrismaService } from '../../../src/shared/prisma/prisma.service';
 import { RequestsService } from '../../../src/modules/requests/requests.service';
 import { ReconciliationService } from '../../../src/modules/reconciliation/reconciliation.service';
 import { BalancesService } from '../../../src/modules/balances/balances.service';
-import { ReserveHcmProcessor } from '../../../src/workers/reserve-hcm.processor';
+import { HcmSagaProcessor } from '../../../src/workers/hcm-saga.processor';
 import { HcmInMemoryAdapter } from '../../../src/modules/hcm-client/hcm-in-memory.adapter';
 import { HCM_PORT } from '../../../src/modules/hcm-client/hcm.port';
 import { INestApplication } from '@nestjs/common';
@@ -15,7 +15,7 @@ describe('Drift survival (T-2)', () => {
   let svc: RequestsService;
   let recon: ReconciliationService;
   let balances: BalancesService;
-  let reserve: ReserveHcmProcessor;
+  let reserve: HcmSagaProcessor;
   let hcm: HcmInMemoryAdapter;
 
   beforeAll(async () => {
@@ -28,7 +28,7 @@ describe('Drift survival (T-2)', () => {
     svc = app.get(RequestsService);
     recon = app.get(ReconciliationService);
     balances = app.get(BalancesService);
-    reserve = app.get(ReserveHcmProcessor);
+    reserve = app.get(HcmSagaProcessor);
     hcm = app.get(HCM_PORT) as HcmInMemoryAdapter;
   });
 

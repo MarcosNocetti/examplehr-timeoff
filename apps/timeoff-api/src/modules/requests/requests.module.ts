@@ -8,9 +8,6 @@ import { BalancesModule } from '../balances/balances.module';
 import { HcmClientModule } from '../hcm-client/hcm-client.module';
 import { ReconciliationModule } from '../reconciliation/reconciliation.module';
 import { HcmSagaProcessor } from '../../workers/hcm-saga.processor';
-import { ReserveHcmProcessor } from '../../workers/reserve-hcm.processor';
-import { ConfirmHcmProcessor } from '../../workers/confirm-hcm.processor';
-import { CompensateHcmProcessor } from '../../workers/compensate-hcm.processor';
 
 @Module({
   imports: [OutboxModule, BalancesModule, HcmClientModule, forwardRef(() => ReconciliationModule)],
@@ -19,10 +16,7 @@ import { CompensateHcmProcessor } from '../../workers/compensate-hcm.processor';
     RequestsService,
     RequestRepository,
     MovementRepository,
-    ReserveHcmProcessor,
-    ConfirmHcmProcessor,
-    CompensateHcmProcessor,
-    HcmSagaProcessor, // the ONLY class that subscribes to the BullMQ queue
+    HcmSagaProcessor,
   ],
   exports: [RequestsService, RequestRepository, MovementRepository],
 })

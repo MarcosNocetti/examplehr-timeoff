@@ -2,7 +2,7 @@ import { Test } from '@nestjs/testing';
 import { AppModule } from '../../../src/app.module';
 import { PrismaService } from '../../../src/shared/prisma/prisma.service';
 import { RequestsService } from '../../../src/modules/requests/requests.service';
-import { ReserveHcmProcessor } from '../../../src/workers/reserve-hcm.processor';
+import { HcmSagaProcessor } from '../../../src/workers/hcm-saga.processor';
 import { HcmInMemoryAdapter } from '../../../src/modules/hcm-client/hcm-in-memory.adapter';
 import { HCM_PORT } from '../../../src/modules/hcm-client/hcm.port';
 import { INestApplication } from '@nestjs/common';
@@ -11,7 +11,7 @@ describe('Defensive HCM (T-6)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let svc: RequestsService;
-  let reserve: ReserveHcmProcessor;
+  let reserve: HcmSagaProcessor;
   let hcm: HcmInMemoryAdapter;
 
   beforeAll(async () => {
@@ -22,7 +22,7 @@ describe('Defensive HCM (T-6)', () => {
     await app.init();
     prisma = app.get(PrismaService);
     svc = app.get(RequestsService);
-    reserve = app.get(ReserveHcmProcessor);
+    reserve = app.get(HcmSagaProcessor);
     hcm = app.get(HCM_PORT) as HcmInMemoryAdapter;
   });
   afterAll(async () => app.close());
