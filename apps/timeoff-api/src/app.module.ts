@@ -21,6 +21,12 @@ import { EmployeesModule } from './modules/employees/employees.module';
     BullModule.forRoot({
       connection: new IORedis(process.env.REDIS_URL ?? 'redis://localhost:6379', {
         maxRetriesPerRequest: null,
+        // Lazy connect so Test.createTestingModule() in CI doesn't eagerly
+        // attempt a Redis handshake (which can fail or hang when a test
+        // only cares about AppModule wiring, not queue behavior).
+        lazyConnect: true,
+        // Don't kill tests with retry spam when Redis isn't available.
+        enableOfflineQueue: true,
       }),
     }),
     BullModule.registerQueue({ name: 'hcm-saga' }),
