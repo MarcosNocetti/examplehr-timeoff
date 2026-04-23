@@ -76,7 +76,7 @@ export class OutboxRepository {
         });
         return;
       }
-      const delay = BACKOFF_MS[Math.min(attempts, BACKOFF_MS.length - 1)] ?? 1000;
+      const delay = BACKOFF_MS[Math.min(attempts - 1, BACKOFF_MS.length - 1)] ?? 1000;
       await tx.outboxEntry.update({
         where: { id },
         data: {

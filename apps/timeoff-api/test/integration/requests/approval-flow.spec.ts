@@ -72,11 +72,11 @@ describe('Approval lifecycle (integration)', () => {
       where: { requestId: r.id },
       orderBy: { createdAt: 'asc' },
     });
-    // Order: PENDING_RESERVATION(-3), CONFIRMED(-3), CANCELLED(+3 to offset pending)
+    // Order: PENDING_RESERVATION(-3) then CONFIRMED(+3) — nets to zero in calculator.
+    // totalDays is already updated from HCM (deducted by HCM), so no CANCELLED noise needed.
     expect(ms.map((m) => m.type)).toEqual([
       MovementType.PENDING_RESERVATION,
       MovementType.CONFIRMED,
-      MovementType.CANCELLED,
     ]);
   });
 

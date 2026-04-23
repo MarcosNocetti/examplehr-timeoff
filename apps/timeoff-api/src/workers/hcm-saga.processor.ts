@@ -193,21 +193,12 @@ export class HcmSagaProcessor extends WorkerHost {
         throw new OptimisticLockError();
       }
       // CONFIRMED(+days) releases the PENDING_RESERVATION — net zero in RESERVATION_TYPES.
-      // The actual deduction is captured by the totalDays reduction above.
+      // The actual deduction is captured by the totalDays reduction above (synced from HCM).
       await this.movements.create({
         employeeId: req.employeeId,
         locationId: req.locationId,
         delta: new Decimal(payload.days),
         type: MovementType.CONFIRMED,
-        requestId: req.id,
-        tx,
-      });
-      // CANCELLED(+days) explicitly closes the original PENDING_RESERVATION entry.
-      await this.movements.create({
-        employeeId: req.employeeId,
-        locationId: req.locationId,
-        delta: new Decimal(payload.days),
-        type: MovementType.CANCELLED,
         requestId: req.id,
         tx,
       });
