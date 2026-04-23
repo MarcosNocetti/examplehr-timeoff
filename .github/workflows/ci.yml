@@ -39,6 +39,9 @@ jobs:
       - name: Build contracts package
         run: pnpm --filter @examplehr/contracts build
 
+      - name: Build hcm-mock (spawned as subprocess by one integration test)
+        run: pnpm --filter hcm-mock build
+
       - name: Generate Prisma client
         run: pnpm --filter timeoff-api prisma:generate
 
