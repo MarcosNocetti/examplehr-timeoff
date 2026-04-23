@@ -1,5 +1,5 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Inject, Logger } from '@nestjs/common';
+import { Inject, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { Job } from 'bullmq';
 import Decimal from 'decimal.js';
 import { PrismaService } from '../shared/prisma/prisma.service';
@@ -24,7 +24,7 @@ import {
  * @Processor classes all listen on the same queue name.
  */
 @Processor('hcm-saga', { concurrency: 10 })
-export class HcmSagaProcessor extends WorkerHost {
+export class HcmSagaProcessor extends WorkerHost implements OnApplicationBootstrap {
   private readonly log = new Logger(HcmSagaProcessor.name);
 
   constructor(
@@ -38,12 +38,20 @@ export class HcmSagaProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job): Promise<void> {
-    // The api container should not run BullMQ workers — they're only on the worker
-    // container. BullMQ may have spawned a worker anyway because of the @Processor
-    // decorator; no-op here to prevent double-processing.
-    if (process.env.ROLE === 'api') return;
+  async onApplicationBootstrap() {
+    // The api container should NOT consume jobs — only the worker container does.
+    // @Processor auto-spawns a BullMQ Worker; here we close it on api boot so it
+    // doesn't race the worker container's Worker (which would silently no-op
+    // and BullMQ would mark the job complete, never reaching the real worker).
+    // Uses onApplicationBootstrap (not onModuleInit) because @nestjs/bullmq
+    // initializes the underlying Worker between those two lifecycle hooks.
+    if (process.env.ROLE === 'api') {
+      await this.worker.close();
+      this.log.log('Closed BullMQ worker on api container (ROLE=api)');
+    }
+  }
 
+  async process(job: Job): Promise<void> {
     switch (job.name) {
       case 'RESERVE_HCM':
         return this.handleReserve(job);
