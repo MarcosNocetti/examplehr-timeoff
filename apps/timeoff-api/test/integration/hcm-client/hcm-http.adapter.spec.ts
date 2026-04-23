@@ -1,9 +1,11 @@
 import { HcmHttpAdapter } from '../../../src/modules/hcm-client/hcm-http.adapter';
 import { spawn, ChildProcess } from 'child_process';
+import { existsSync } from 'fs';
+import { dirname, join, resolve as resolvePath } from 'path';
 import { setTimeout as wait } from 'timers/promises';
 import * as http from 'http';
 
-async function waitReady(url: string, ms = 15000) {
+async function waitReady(url: string, ms = 20000) {
   const start = Date.now();
   while (Date.now() - start < ms) {
     try {
@@ -21,6 +23,23 @@ async function waitReady(url: string, ms = 15000) {
   throw new Error('mock not ready');
 }
 
+/** Locate apps/hcm-mock/dist/main.js by walking up from process.cwd(). */
+function findHcmMockEntry(): string {
+  let dir = process.cwd();
+  for (let i = 0; i < 8; i++) {
+    const direct = join(dir, 'apps', 'hcm-mock', 'dist', 'main.js');
+    if (existsSync(direct)) return direct;
+    const sibling = join(dir, '..', 'hcm-mock', 'dist', 'main.js');
+    if (existsSync(sibling)) return resolvePath(sibling);
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  throw new Error(
+    'hcm-mock dist/main.js not found. Build it first: pnpm --filter hcm-mock run build',
+  );
+}
+
 const PORT = '4101';
 const BASE = `http://localhost:${PORT}`;
 
@@ -28,10 +47,12 @@ describe('HcmHttpAdapter (integration with mock)', () => {
   let proc: ChildProcess;
 
   beforeAll(async () => {
-    proc = spawn('pnpm', ['--filter', 'hcm-mock', 'start'], {
-      env: { ...process.env, PORT },
+    // Spawn node directly on the built entrypoint so we skip pnpm/shell
+    // wrapping — process-tree handling is much more predictable across OSes.
+    const entry = findHcmMockEntry();
+    proc = spawn(process.execPath, [entry], {
+      env: { ...process.env, PORT, NODE_ENV: 'test' },
       stdio: 'pipe',
-      shell: true,
     });
     proc.stdout?.on('data', () => {});
     proc.stderr?.on('data', () => {});
@@ -39,16 +60,15 @@ describe('HcmHttpAdapter (integration with mock)', () => {
   }, 30000);
 
   afterAll(async () => {
-    if (proc?.pid) {
-      // On Windows, killing pnpm only kills the wrapper; we need taskkill for the tree.
-      const { exec } = require('child_process');
+    if (proc?.pid && !proc.killed) {
       await new Promise<void>((resolve) => {
-        if (process.platform === 'win32') {
-          exec(`taskkill /pid ${proc.pid} /f /t`, () => resolve());
-        } else {
-          proc.kill('SIGTERM');
+        proc.once('exit', () => resolve());
+        proc.kill('SIGTERM');
+        // Safety net: if SIGTERM is ignored, force kill after 2s.
+        setTimeout(() => {
+          if (!proc.killed) proc.kill('SIGKILL');
           resolve();
-        }
+        }, 2000);
       });
     }
   });
