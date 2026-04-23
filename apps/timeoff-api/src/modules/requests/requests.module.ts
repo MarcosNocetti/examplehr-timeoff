@@ -1,7 +1,6 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { RequestsService } from './requests.service';
 import { RequestRepository } from './request.repository';
-import { MovementRepository } from './movement.repository';
 import { RequestsController } from './requests.controller';
 import { OutboxModule } from '../outbox/outbox.module';
 import { BalancesModule } from '../balances/balances.module';
@@ -15,9 +14,9 @@ import { HcmSagaProcessor } from '../../workers/hcm-saga.processor';
   providers: [
     RequestsService,
     RequestRepository,
-    MovementRepository,
     HcmSagaProcessor,
   ],
-  exports: [RequestsService, RequestRepository, MovementRepository],
+  // MovementRepository is declared and exported by BalancesModule; no duplicate needed here.
+  exports: [RequestsService, RequestRepository],
 })
 export class RequestsModule {}

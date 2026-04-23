@@ -21,12 +21,20 @@ describe('Health endpoints (integration)', () => {
     expect(r.body).toEqual({ status: 'ok' });
   });
 
-  it('GET /health/ready reports per-dependency status (db should be up; redis/hcm down without infra)', async () => {
-    const r = await request(app.getHttpServer()).get('/health/ready').expect(200);
-    expect(r.body.status).toMatch(/ok|degraded/);
-    expect(r.body.db.status).toBe('up');
-    // Redis and HCM are typically down in isolated Jest runs
-    expect(r.body.redis).toBeDefined();
-    expect(r.body.hcm).toBeDefined();
+  it('GET /health/ready returns 503 with structured body when redis/hcm down (k8s-ready)', async () => {
+    // Redis and HCM are down in isolated Jest runs — service must return 503 so k8s
+    // can take the pod out of rotation.
+    const r = await request(app.getHttpServer()).get('/health/ready');
+    // DB is up; redis/hcm are down → degraded → 503
+    if (r.status === 200) {
+      // All deps happen to be up (full-stack env); just verify shape
+      expect(r.body.status).toBe('ok');
+    } else {
+      expect(r.status).toBe(503);
+      expect(r.body.status).toBe('degraded');
+      expect(r.body.db.status).toBe('up');
+      expect(r.body.redis).toBeDefined();
+      expect(r.body.hcm).toBeDefined();
+    }
   });
 });

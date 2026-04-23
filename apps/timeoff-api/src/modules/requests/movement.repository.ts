@@ -42,6 +42,14 @@ export class MovementRepository {
     return rows.map((r) => this.toRow(r));
   }
 
+  async listForEmployee(employeeId: string): Promise<MovementRow[]> {
+    const rows = await this.prisma.timeOffMovement.findMany({
+      where: { employeeId },
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.map((r) => this.toRow(r));
+  }
+
   async listByRequestId(requestId: string): Promise<MovementRow[]> {
     const rows = await this.prisma.timeOffMovement.findMany({ where: { requestId }, orderBy: { createdAt: 'asc' } });
     return rows.map((r) => this.toRow(r));

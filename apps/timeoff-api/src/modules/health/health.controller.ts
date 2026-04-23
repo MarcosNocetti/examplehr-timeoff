@@ -1,4 +1,4 @@
-import { Controller, Get, HttpCode } from '@nestjs/common';
+import { Controller, Get, HttpException, HttpStatus } from '@nestjs/common';
 import { PrismaService } from '../../shared/prisma/prisma.service';
 import IORedis from 'ioredis';
 
@@ -26,7 +26,6 @@ export class HealthController {
   }
 
   @Get('ready')
-  @HttpCode(200) // we always return 200; the body says what's down
   async readiness(): Promise<ReadinessReport> {
     const [db, redis, hcm] = await Promise.all([
       this.checkDb(),
@@ -34,7 +33,11 @@ export class HealthController {
       this.checkHcm(),
     ]);
     const allUp = db.status === 'up' && redis.status === 'up' && hcm.status === 'up';
-    return { status: allUp ? 'ok' : 'degraded', db, redis, hcm };
+    const report: ReadinessReport = { status: allUp ? 'ok' : 'degraded', db, redis, hcm };
+    if (!allUp) {
+      throw new HttpException(report, HttpStatus.SERVICE_UNAVAILABLE);
+    }
+    return report;
   }
 
   private async checkDb(): Promise<CheckStatus> {
