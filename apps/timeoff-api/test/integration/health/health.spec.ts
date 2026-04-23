@@ -23,9 +23,9 @@ describe('Health endpoints (integration)', () => {
 
   it('GET /health/ready returns 503 with structured body when redis/hcm down (k8s-ready)', async () => {
     // Redis and HCM are down in isolated Jest runs — service must return 503 so k8s
-    // can take the pod out of rotation.
+    // can take the pod out of rotation. The Redis lazyConnect can take a few seconds
+    // to time out on the first call, so we extend the per-test timeout below.
     const r = await request(app.getHttpServer()).get('/health/ready');
-    // DB is up; redis/hcm are down → degraded → 503
     if (r.status === 200) {
       // All deps happen to be up (full-stack env); just verify shape
       expect(r.body.status).toBe('ok');
@@ -36,5 +36,5 @@ describe('Health endpoints (integration)', () => {
       expect(r.body.redis).toBeDefined();
       expect(r.body.hcm).toBeDefined();
     }
-  });
+  }, 15000);
 });

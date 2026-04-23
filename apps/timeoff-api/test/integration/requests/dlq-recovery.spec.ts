@@ -78,12 +78,11 @@ describe('DLQ recovery via force-fail (T-5)', () => {
     expect(updated?.status).toBe(RequestStatus.FAILED);
     expect(updated?.sagaState).toBe(SagaState.TERMINAL);
 
-    // Available days remain 7: CANCELLED movements are not in RESERVATION_TYPES, so the
-    // calculator still sees PENDING_RESERVATION(-3) from totalDays(10). The actual HCM
-    // reservation was never confirmed, so totalDays is not deducted. The next HCM sync
-    // (reconciliation) will update totalDays once HCM releases the reservation.
+    // Balance is fully restored: CANCELLED(+3) is in RESERVATION_TYPES and
+    // offsets the original PENDING_RESERVATION(-3). totalDays is unchanged
+    // since HCM was never confirmed.
     const afterForceFail = await balances.listForEmployee('e1');
-    expect(afterForceFail[0]?.availableDays).toBe('7');
+    expect(afterForceFail[0]?.availableDays).toBe('10');
 
     // Ledger trail: PENDING_RESERVATION(-3) + CANCELLED(+3) net to zero
     const ms = await prisma.timeOffMovement.findMany({

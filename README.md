@@ -16,11 +16,20 @@ Once up:
 
 | URL | Purpose |
 |---|---|
+| http://localhost:5173 | **Web UI (start here)** — switch between Employee / Manager / Admin |
 | http://localhost:3000 | API |
 | http://localhost:3000/docs | Swagger UI |
 | http://localhost:3000/health | Liveness |
 | http://localhost:3000/health/ready | Readiness (db + redis + hcm) |
 | http://localhost:4000 | HCM mock |
+
+### Using the UI
+
+1. Open **http://localhost:5173** — defaults to the Employee page.
+2. The dropdown in the top-right switches identity (Employee e1/e2, Manager m1, Admin) — auth is mock-headers, so this just changes what's sent on every request.
+3. **First time:** switch to Admin, "Seed HCM mock" + "Push to API" with `e1`/`l1`/`10`. Now switch to Employee → you'll see the balance.
+4. Submit a new request. Watch the saga progress (RESERVING_HCM → AWAITING_APPROVAL) auto-refresh every 2s.
+5. Switch to Manager → approve/reject. Watch the request reach APPROVED/REJECTED + balance update.
 
 Stop and clear state:
 

@@ -16,6 +16,7 @@ export class HealthController {
     lazyConnect: true,
     maxRetriesPerRequest: 1,
     enableOfflineQueue: false,
+    connectTimeout: 1500,
   });
 
   constructor(private readonly prisma: PrismaService) {}
@@ -52,16 +53,23 @@ export class HealthController {
 
   private async checkRedis(): Promise<CheckStatus> {
     const t = Date.now();
-    try {
-      if (this.redis.status !== 'ready') {
-        await this.redis.connect().catch(() => undefined);
+    const TIMEOUT_MS = 2000;
+    const timeout = new Promise<CheckStatus>((resolve) =>
+      setTimeout(() => resolve({ status: 'down', latencyMs: Date.now() - t, error: 'timeout' }), TIMEOUT_MS),
+    );
+    const probe = (async (): Promise<CheckStatus> => {
+      try {
+        if (this.redis.status !== 'ready') {
+          await this.redis.connect().catch(() => undefined);
+        }
+        const pong = await this.redis.ping();
+        if (pong !== 'PONG') throw new Error(`unexpected response: ${pong}`);
+        return { status: 'up', latencyMs: Date.now() - t };
+      } catch (e: any) {
+        return { status: 'down', error: e.message ?? String(e), latencyMs: Date.now() - t };
       }
-      const pong = await this.redis.ping();
-      if (pong !== 'PONG') throw new Error(`unexpected response: ${pong}`);
-      return { status: 'up', latencyMs: Date.now() - t };
-    } catch (e: any) {
-      return { status: 'down', error: e.message ?? String(e) };
-    }
+    })();
+    return Promise.race([probe, timeout]);
   }
 
   private async checkHcm(): Promise<CheckStatus> {
