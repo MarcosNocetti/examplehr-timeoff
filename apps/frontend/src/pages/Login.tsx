@@ -54,10 +54,7 @@ export default function LoginPage() {
                 onClick={() => pickIdentity(e)}
                 className="w-full text-left bg-white border border-slate-200 hover:border-slate-400 rounded-md p-4 flex items-center justify-between"
               >
-                <span>
-                  <span className="font-medium text-slate-900">{e.name}</span>
-                  <span className="ml-2 text-xs text-slate-400">id: {e.id.slice(0, 8)}…</span>
-                </span>
+                <span className="font-medium text-slate-900">{e.name}</span>
                 <span className={`text-xs px-2 py-1 rounded ${ROLE_BADGE[e.role]}`}>{e.role}</span>
               </button>
             </li>

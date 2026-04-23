@@ -7,7 +7,7 @@ import RequestList from '../components/RequestList';
 interface Balance {
   employeeId: string; locationId: string; totalDays: string; availableDays: string; version: number; hcmLastSeenAt: string;
 }
-interface Me { id: string; name: string; role: string; managerId: string | null; }
+interface Me { id: string; name: string; role: string; managerId: string | null; managerName: string | null; }
 
 type Req = any;
 
@@ -18,13 +18,6 @@ export default function EmployeePage() {
   const meQ = useQuery({
     queryKey: ['me', id.id],
     queryFn: () => api<Me>('/employees/me', {}, id),
-  });
-
-  // Fetch the manager's name if any — only admins can read /employees/:id directly
-  const managerQ = useQuery({
-    queryKey: ['employee', meQ.data?.managerId],
-    queryFn: () => api<any>(`/employees/${meQ.data!.managerId}`, {}, id).catch(() => null),
-    enabled: !!meQ.data?.managerId && id.role === 'admin',
   });
 
   const balQ = useQuery({
@@ -72,12 +65,9 @@ export default function EmployeePage() {
 
   return (
     <div className="space-y-6">
-      {meQ.data?.managerId && (
+      {meQ.data?.managerName && (
         <div className="text-sm text-slate-600">
-          My manager:{' '}
-          <strong>
-            {managerQ.data?.name ?? `id: ${meQ.data.managerId.slice(0, 8)}…`}
-          </strong>
+          My manager: <strong>{meQ.data.managerName}</strong>
         </div>
       )}
 

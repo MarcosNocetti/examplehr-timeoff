@@ -1,6 +1,7 @@
 type Req = {
   id: string;
   employeeId: string;
+  employeeName?: string | null;
   locationId: string;
   startDate: string;
   endDate: string;
@@ -33,7 +34,7 @@ export default function RequestList({
         <li key={r.id} className="bg-white border border-slate-200 rounded-md p-3 flex items-center justify-between">
           <div>
             <div className="text-sm font-medium text-slate-900">
-              {r.employeeId} · {r.locationId} · {r.days}d
+              {r.employeeName ?? 'Employee'} · {r.locationId} · {r.days}d
             </div>
             <div className="text-xs text-slate-500">
               {new Date(r.startDate).toLocaleDateString()} → {new Date(r.endDate).toLocaleDateString()}
