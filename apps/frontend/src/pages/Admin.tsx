@@ -4,7 +4,8 @@ import { api, ApiError } from '../api';
 import { useIdentity } from '../auth';
 import RequestList from '../components/RequestList';
 
-const HCM_ADMIN_BASE = (import.meta as any).env?.VITE_HCM_URL ?? 'http://localhost:4000';
+// IPv4 — see comment in api.ts about Docker Desktop / browser localhost issue.
+const HCM_ADMIN_BASE = (import.meta as any).env?.VITE_HCM_URL ?? 'http://127.0.0.1:4000';
 
 async function hcmAdmin(path: string, body: any) {
   const res = await fetch(`${HCM_ADMIN_BASE}${path}`, {
@@ -68,12 +69,63 @@ export default function AdminPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['requests'] }),
   });
 
+  // Convenience: seed HCM AND push to API for two demo employees with one click.
+  const oneClickMut = useMutation({
+    mutationFn: async () => {
+      const setup = async (employeeId: string, totalDays: string) => {
+        await hcmAdmin('/_admin/seed', { employeeId, locationId: 'l1', totalDays });
+        await api('/hcm-webhook/realtime', {
+          method: 'POST',
+          body: JSON.stringify({
+            employeeId,
+            locationId: 'l1',
+            newTotal: totalDays,
+            hcmTimestamp: new Date().toISOString(),
+          }),
+        }, id);
+      };
+      await setup('e1', '10');
+      await setup('e2', '15');
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['balance'] });
+      setErrorMsg(null);
+    },
+    onError: (e: any) => setErrorMsg(e instanceof ApiError ? e.body?.detail ?? e.message : String(e)),
+  });
+
   if (id.role !== 'admin') {
-    return <p className="text-slate-600">Switch to admin to use this page.</p>;
+    return (
+      <div className="bg-amber-50 border border-amber-200 rounded-md p-4">
+        <p className="text-sm text-amber-900">
+          Switch to <strong>Admin</strong> in the top-right dropdown to use this page.
+        </p>
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6">
+      <section>
+        <div className="bg-emerald-50 border border-emerald-200 rounded-md p-4">
+          <h3 className="text-sm font-semibold text-emerald-900 mb-1">Quick demo setup</h3>
+          <p className="text-xs text-emerald-800 mb-3">
+            Seeds HCM + pushes balances to the API for <code className="bg-emerald-100 px-1 rounded">e1</code> (10 days)
+            and <code className="bg-emerald-100 px-1 rounded">e2</code> (15 days). Then switch to the Employee page.
+          </p>
+          <button
+            onClick={() => oneClickMut.mutate()}
+            disabled={oneClickMut.isPending}
+            className="bg-emerald-700 hover:bg-emerald-800 text-white text-sm px-4 py-2 rounded-md disabled:opacity-50"
+          >
+            {oneClickMut.isPending ? 'Setting up…' : 'Run one-click demo setup'}
+          </button>
+          {oneClickMut.isSuccess && (
+            <p className="text-xs text-emerald-700 mt-2">✓ Done. Switch to Employee (e1 or e2) to see balances.</p>
+          )}
+        </div>
+      </section>
+
       <section>
         <h2 className="text-lg font-semibold mb-2">1. Seed HCM mock</h2>
         <p className="text-xs text-slate-500 mb-2">Sets initial balance in the HCM mock (server-side only — local DB not touched).</p>

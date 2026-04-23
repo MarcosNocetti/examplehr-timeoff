@@ -8,24 +8,56 @@ const DEFAULT: Identity = { employeeId: 'e1', role: 'employee' };
 
 let listeners: Array<() => void> = [];
 
+// Cache the last parsed Identity + the raw JSON it came from.
+// useSyncExternalStore's getSnapshot MUST return a stable reference when
+// nothing has changed (it uses Object.is to detect change). Parsing JSON
+// on every render returns a new object each time, which makes React think
+// the state changed and triggers an infinite re-render loop (error #185).
+let cachedRaw: string | null = null;
+let cachedIdentity: Identity = DEFAULT;
+
 function read(): Identity {
+  let raw: string | null = null;
   try {
-    const raw = localStorage.getItem(KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return DEFAULT;
+    raw = localStorage.getItem(KEY);
+  } catch {
+    return DEFAULT;
+  }
+  if (raw === null) {
+    cachedRaw = null;
+    cachedIdentity = DEFAULT;
+    return DEFAULT;
+  }
+  if (raw === cachedRaw) return cachedIdentity;
+  try {
+    cachedIdentity = JSON.parse(raw) as Identity;
+    cachedRaw = raw;
+  } catch {
+    cachedIdentity = DEFAULT;
+    cachedRaw = null;
+  }
+  return cachedIdentity;
 }
 
 function write(id: Identity) {
-  localStorage.setItem(KEY, JSON.stringify(id));
+  const raw = JSON.stringify(id);
+  localStorage.setItem(KEY, raw);
+  cachedRaw = raw;
+  cachedIdentity = id;
   listeners.forEach((l) => l());
 }
 
-export function setIdentity(id: Identity) { write(id); }
+export function setIdentity(id: Identity) {
+  write(id);
+}
+
+const subscribe = (cb: () => void) => {
+  listeners.push(cb);
+  return () => {
+    listeners = listeners.filter((l) => l !== cb);
+  };
+};
 
 export function useIdentity(): Identity {
-  return useSyncExternalStore(
-    (cb) => { listeners.push(cb); return () => { listeners = listeners.filter((l) => l !== cb); }; },
-    read,
-  );
+  return useSyncExternalStore(subscribe, read);
 }

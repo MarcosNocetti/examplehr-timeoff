@@ -3,6 +3,7 @@ import EmployeePage from './pages/Employee';
 import ManagerPage from './pages/Manager';
 import AdminPage from './pages/Admin';
 import IdentitySwitcher from './components/IdentitySwitcher';
+import ErrorBoundary from './components/ErrorBoundary';
 
 function NavLink({ to, label }: { to: string; label: string }) {
   const { pathname } = useLocation();
@@ -36,12 +37,14 @@ export default function App() {
         </div>
       </header>
       <main className="max-w-5xl mx-auto px-4 py-6">
-        <Routes>
-          <Route path="/" element={<Navigate to="/employee" replace />} />
-          <Route path="/employee" element={<EmployeePage />} />
-          <Route path="/manager" element={<ManagerPage />} />
-          <Route path="/admin" element={<AdminPage />} />
-        </Routes>
+        <ErrorBoundary>
+          <Routes>
+            <Route path="/" element={<Navigate to="/employee" replace />} />
+            <Route path="/employee" element={<EmployeePage />} />
+            <Route path="/manager" element={<ManagerPage />} />
+            <Route path="/admin" element={<AdminPage />} />
+          </Routes>
+        </ErrorBoundary>
       </main>
     </div>
   );

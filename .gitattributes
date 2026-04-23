@@ -1,0 +1,9 @@
+# Force LF for files Linux containers execute or care about line endings
+*.sh        text eol=lf
+Dockerfile  text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+nginx.conf  text eol=lf
+
+# Default: let git auto-detect; on checkout match the OS
+*           text=auto

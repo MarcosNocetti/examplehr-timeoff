@@ -1,6 +1,9 @@
 import { Identity } from './auth';
 
-const BASE = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:3000';
+// Default to the host's IPv4 — Docker Desktop on Windows binds only to IPv4
+// and `localhost` resolves to `::1` (IPv6) in browsers, which would hang.
+// Override with VITE_API_URL at build time if your host differs.
+const BASE = (import.meta as any).env?.VITE_API_URL ?? 'http://127.0.0.1:3000';
 
 export class ApiError extends Error {
   constructor(public status: number, public body: any) {

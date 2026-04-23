@@ -62,9 +62,20 @@ export default function EmployeePage() {
     <div className="space-y-6">
       <section>
         <h2 className="text-lg font-semibold mb-2">My balance</h2>
-        {balQ.isLoading && <p>Loading...</p>}
-        {balQ.error && <p className="text-rose-600 text-sm">No balance yet — admin must seed via /admin</p>}
-        {balQ.data && balQ.data.length === 0 && <p className="text-sm text-slate-500">No balance yet — admin must seed via /admin.</p>}
+        {balQ.isLoading && <p className="text-sm text-slate-500">Loading…</p>}
+        {(balQ.error || (balQ.data && balQ.data.length === 0)) && (
+          <div className="bg-amber-50 border border-amber-200 rounded-md p-4 text-sm text-amber-900 space-y-2">
+            <p><strong>No balance yet for {id.employeeId}.</strong></p>
+            <p>
+              Balances live in the HCM system (the "source of truth"). To bootstrap demo data:
+            </p>
+            <ol className="list-decimal list-inside text-xs space-y-1">
+              <li>Switch to <strong>Admin</strong> in the top-right dropdown</li>
+              <li>Click <strong>"Run one-click demo setup"</strong> (seeds e1 with 10 days + e2 with 15 days)</li>
+              <li>Switch back to this page — the balance will appear</li>
+            </ol>
+          </div>
+        )}
         {balQ.data && balQ.data.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {balQ.data.map((b) => (
