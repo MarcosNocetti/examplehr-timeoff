@@ -17,9 +17,15 @@ export class OutboxDispatcher implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit() {
-    // OUTBOX_POLL_DISABLED=1 is set on the api container (ROLE=api) so only
-    // the worker container polls the outbox and runs the reaper.
+    // The dispatcher only runs on the worker container. The api container and
+    // tests both lack ROLE=worker so the timers never start there — this
+    // avoids log spam from tests hitting a DB without the OutboxEntry table
+    // and prevents two pollers racing on the same SQLite file.
+    // OUTBOX_POLL_DISABLED=1 also short-circuits for tests that want to
+    // drive tick() manually.
     if (process.env.OUTBOX_POLL_DISABLED === '1') return;
+    if (process.env.ROLE !== 'worker') return;
+
     const intervalMs = Number(process.env.OUTBOX_POLL_MS ?? 500);
     this.timer = setInterval(() => void this.tick(), intervalMs);
 
