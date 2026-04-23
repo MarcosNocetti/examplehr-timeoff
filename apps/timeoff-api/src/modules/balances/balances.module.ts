@@ -3,8 +3,10 @@ import { BalancesController } from './balances.controller';
 import { BalancesService } from './balances.service';
 import { BalanceRepository } from './balance.repository';
 import { MovementRepository } from '../requests/movement.repository';
+import { EmployeesModule } from '../employees/employees.module';
 
 @Module({
+  imports: [EmployeesModule],
   controllers: [BalancesController],
   providers: [BalancesService, BalanceRepository, MovementRepository],
   exports: [BalanceRepository, MovementRepository, BalancesService],

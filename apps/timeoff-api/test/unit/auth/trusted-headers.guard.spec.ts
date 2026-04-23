@@ -2,6 +2,8 @@ import { ExecutionContext } from '@nestjs/common';
 import { TrustedHeadersGuard } from '../../../src/shared/auth/trusted-headers.guard';
 import { Role } from '@examplehr/contracts';
 
+const stubReflector = { getAllAndOverride: () => false } as any;
+
 const ctxFor = (headers: Record<string, string>): ExecutionContext => ({
   switchToHttp: () => ({ getRequest: () => ({ headers }) }),
   getHandler: () => null,
@@ -9,7 +11,7 @@ const ctxFor = (headers: Record<string, string>): ExecutionContext => ({
 } as any);
 
 describe('TrustedHeadersGuard', () => {
-  const guard = new TrustedHeadersGuard();
+  const guard = new TrustedHeadersGuard(stubReflector);
 
   it('rejects when x-employee-id missing', () => {
     expect(() => guard.canActivate(ctxFor({}))).toThrow(/x-employee-id/);

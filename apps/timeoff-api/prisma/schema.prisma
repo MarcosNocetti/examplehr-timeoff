@@ -48,6 +48,20 @@ model TimeOffRequest {
   @@index([employeeId, status])
 }
 
+model Employee {
+  id         String   @id @default(uuid())
+  name       String
+  email      String   @unique
+  role       String   // 'employee' | 'manager' | 'admin' (matches contracts Role enum values)
+  managerId  String?
+  manager    Employee?  @relation("EmployeeManager", fields: [managerId], references: [id], onDelete: SetNull)
+  reports    Employee[] @relation("EmployeeManager")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  @@index([role])
+  @@index([managerId])
+}
+
 model OutboxEntry {
   id            String   @id @default(uuid())
   aggregateId   String

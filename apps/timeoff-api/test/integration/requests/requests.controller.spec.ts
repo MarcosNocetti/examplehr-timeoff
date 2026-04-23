@@ -10,16 +10,41 @@ describe('Requests HTTP surface (integration)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
 
+  // Real employee IDs — manager RBAC on GET /requests requires Employee rows.
+  let empId1: string;
+  let empId2: string;
+  let mgrId: string;
+
   beforeAll(async () => {
     process.env.OUTBOX_POLL_DISABLED = '1';
+    process.env.SKIP_SEED = '1';
     const m = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = m.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
     app.useGlobalFilters(new GlobalExceptionFilter());
     await app.init();
     prisma = app.get(PrismaService);
+
+    // Seed test employees.
+    await prisma.employee.deleteMany();
+    const mgr = await prisma.employee.create({
+      data: { name: 'Test Manager', email: 'mgr@test.dev', role: Role.MANAGER },
+    });
+    mgrId = mgr.id;
+    const e1 = await prisma.employee.create({
+      data: { name: 'Test E1', email: 'e1@test.dev', role: Role.EMPLOYEE, managerId: mgr.id },
+    });
+    empId1 = e1.id;
+    const e2 = await prisma.employee.create({
+      data: { name: 'Test E2', email: 'e2@test.dev', role: Role.EMPLOYEE, managerId: mgr.id },
+    });
+    empId2 = e2.id;
   });
-  afterAll(async () => app.close());
+
+  afterAll(async () => {
+    await prisma.employee.deleteMany();
+    await app.close();
+  });
 
   beforeEach(async () => {
     await prisma.outboxEntry.deleteMany();
@@ -27,12 +52,12 @@ describe('Requests HTTP surface (integration)', () => {
     await prisma.timeOffRequest.deleteMany();
     await prisma.balance.deleteMany();
     await prisma.balance.create({
-      data: { employeeId: 'e1', locationId: 'l1', totalDays: '10', hcmLastSeenAt: new Date(), version: 1 },
+      data: { employeeId: empId1, locationId: 'l1', totalDays: '10', hcmLastSeenAt: new Date(), version: 1 },
     });
   });
 
-  const employee = (id = 'e1') => ({ 'x-employee-id': id, 'x-role': Role.EMPLOYEE });
-  const manager = (id = 'm1') => ({ 'x-employee-id': id, 'x-role': Role.MANAGER });
+  const employee = (id?: string) => ({ 'x-employee-id': id ?? empId1, 'x-role': Role.EMPLOYEE });
+  const manager = (id?: string) => ({ 'x-employee-id': id ?? mgrId, 'x-role': Role.MANAGER });
 
   it('POST /requests creates a request', async () => {
     const r = await request(app.getHttpServer())
@@ -67,20 +92,22 @@ describe('Requests HTTP surface (integration)', () => {
       .expect(400);
   });
 
-  it('GET /requests filters to own when employee', async () => {
-    // Seed two requests under different employees
+  it('GET /requests filters to own when employee, manager sees team', async () => {
+    // Seed balance for e2 and create requests for both employees
     await prisma.balance.create({
-      data: { employeeId: 'e2', locationId: 'l1', totalDays: '10', hcmLastSeenAt: new Date(), version: 1 },
+      data: { employeeId: empId2, locationId: 'l1', totalDays: '10', hcmLastSeenAt: new Date(), version: 1 },
     });
-    await request(app.getHttpServer()).post('/requests').set(employee('e1'))
+    await request(app.getHttpServer()).post('/requests').set(employee(empId1))
       .send({ locationId: 'l1', startDate: '2026-05-01', endDate: '2026-05-01', idempotencyKey: 'a' });
-    await request(app.getHttpServer()).post('/requests').set(employee('e2'))
+    await request(app.getHttpServer()).post('/requests').set(employee(empId2))
       .send({ locationId: 'l1', startDate: '2026-05-01', endDate: '2026-05-01', idempotencyKey: 'b' });
 
-    const r = await request(app.getHttpServer()).get('/requests').set(employee('e1')).expect(200);
+    // Employee sees only own
+    const r = await request(app.getHttpServer()).get('/requests').set(employee(empId1)).expect(200);
     expect(r.body).toHaveLength(1);
-    expect(r.body[0].employeeId).toBe('e1');
+    expect(r.body[0].employeeId).toBe(empId1);
 
+    // Manager sees their team (both e1 and e2 report to this manager)
     const r2 = await request(app.getHttpServer()).get('/requests').set(manager()).expect(200);
     expect(r2.body.length).toBeGreaterThanOrEqual(2);
   });

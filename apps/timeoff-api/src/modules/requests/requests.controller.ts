@@ -7,11 +7,15 @@ import { RequestsService } from './requests.service';
 import { CreateRequestBody, RejectRequestBody, ForceFailBody } from './dto/create-request.dto';
 import { ForbiddenError, NotFoundError } from '../../shared/errors/domain.errors';
 import { Role, RequestStatus } from '@examplehr/contracts';
+import { EmployeeRepository } from '../employees/employee.repository';
 
 @Controller('requests')
 @UseGuards(TrustedHeadersGuard, RolesGuard)
 export class RequestsController {
-  constructor(private readonly svc: RequestsService) {}
+  constructor(
+    private readonly svc: RequestsService,
+    private readonly employees: EmployeeRepository,
+  ) {}
 
   @Post()
   @HttpCode(201)
@@ -27,14 +31,21 @@ export class RequestsController {
   }
 
   @Get()
-  list(
+  async list(
     @Query('status') status: RequestStatus | undefined,
     @CurrentUser() user: CurrentUserPayload,
   ) {
-    return this.svc.list({
-      employeeId: user.role === Role.EMPLOYEE ? user.employeeId : undefined,
-      status,
-    });
+    if (user.role === Role.EMPLOYEE) {
+      return this.svc.list({ employeeId: user.employeeId, status });
+    }
+    if (user.role === Role.MANAGER) {
+      const team = await this.employees.listTeamOf(user.employeeId);
+      const teamIds = new Set([user.employeeId, ...team.map((m) => m.id)]);
+      const all = await this.svc.list({ status });
+      return all.filter((r) => teamIds.has(r.employeeId));
+    }
+    // admin: no restriction
+    return this.svc.list({ status });
   }
 
   @Get(':id')
@@ -50,16 +61,29 @@ export class RequestsController {
 
   @Post(':id/approve')
   @Roles(Role.MANAGER, Role.ADMIN)
-  approve(@Param('id') id: string) {
+  async approve(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload) {
+    if (user.role === Role.MANAGER) {
+      const req = await this.svc.findById(id);
+      if (!req) throw new NotFoundError(`TimeOffRequest ${id}`);
+      const target = await this.employees.findById(req.employeeId);
+      if (!target || target.managerId !== user.employeeId) throw new ForbiddenError();
+    }
     return this.svc.approve(id);
   }
 
   @Post(':id/reject')
   @Roles(Role.MANAGER, Role.ADMIN)
-  reject(
+  async reject(
     @Param('id') id: string,
     @Body() body: RejectRequestBody,
+    @CurrentUser() user: CurrentUserPayload,
   ) {
+    if (user.role === Role.MANAGER) {
+      const req = await this.svc.findById(id);
+      if (!req) throw new NotFoundError(`TimeOffRequest ${id}`);
+      const target = await this.employees.findById(req.employeeId);
+      if (!target || target.managerId !== user.employeeId) throw new ForbiddenError();
+    }
     return this.svc.reject(id, body.reason);
   }
 

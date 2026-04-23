@@ -12,6 +12,7 @@ import { OutboxModule } from './modules/outbox/outbox.module';
 import { RequestsModule } from './modules/requests/requests.module';
 import { ReconciliationModule } from './modules/reconciliation/reconciliation.module';
 import { HealthModule } from './modules/health/health.module';
+import { EmployeesModule } from './modules/employees/employees.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { HealthModule } from './modules/health/health.module';
     RequestsModule,
     ReconciliationModule,
     HealthModule,
+    EmployeesModule,
   ],
 })
 export class AppModule implements NestModule {

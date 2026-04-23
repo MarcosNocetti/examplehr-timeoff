@@ -7,9 +7,10 @@ import { BalancesModule } from '../balances/balances.module';
 import { HcmClientModule } from '../hcm-client/hcm-client.module';
 import { ReconciliationModule } from '../reconciliation/reconciliation.module';
 import { HcmSagaProcessor } from '../../workers/hcm-saga.processor';
+import { EmployeesModule } from '../employees/employees.module';
 
 @Module({
-  imports: [OutboxModule, BalancesModule, HcmClientModule, forwardRef(() => ReconciliationModule)],
+  imports: [OutboxModule, BalancesModule, HcmClientModule, forwardRef(() => ReconciliationModule), EmployeesModule],
   controllers: [RequestsController],
   providers: [
     RequestsService,
