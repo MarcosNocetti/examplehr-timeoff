@@ -4,21 +4,37 @@ import { api, ApiError } from '../api';
 import { useIdentity } from '../auth';
 import RequestList from '../components/RequestList';
 
-type Balance = { employeeId: string; locationId: string; totalDays: string; availableDays: string; version: number; hcmLastSeenAt: string };
+interface Balance {
+  employeeId: string; locationId: string; totalDays: string; availableDays: string; version: number; hcmLastSeenAt: string;
+}
+interface Me { id: string; name: string; role: string; managerId: string | null; }
+
 type Req = any;
 
 export default function EmployeePage() {
-  const id = useIdentity();
+  const id = useIdentity()!;  // RequireAuth guarantees non-null
   const qc = useQueryClient();
-  const balQ = useQuery({
-    queryKey: ['balance', id.employeeId],
-    queryFn: () => api<Balance[]>(`/balances/${id.employeeId}`, {}, id),
-    enabled: id.role === 'employee',
+
+  const meQ = useQuery({
+    queryKey: ['me', id.id],
+    queryFn: () => api<Me>('/employees/me', {}, id),
   });
+
+  // Fetch the manager's name if any — only admins can read /employees/:id directly
+  const managerQ = useQuery({
+    queryKey: ['employee', meQ.data?.managerId],
+    queryFn: () => api<any>(`/employees/${meQ.data!.managerId}`, {}, id).catch(() => null),
+    enabled: !!meQ.data?.managerId && id.role === 'admin',
+  });
+
+  const balQ = useQuery({
+    queryKey: ['balance', id.id],
+    queryFn: () => api<Balance[]>(`/balances/${id.id}`, {}, id),
+  });
+
   const reqQ = useQuery({
-    queryKey: ['requests', id.employeeId, 'mine'],
+    queryKey: ['requests', id.id, 'mine'],
     queryFn: () => api<Req[]>(`/requests`, {}, id),
-    enabled: id.role === 'employee',
     refetchInterval: 2000,
   });
 
@@ -35,12 +51,12 @@ export default function EmployeePage() {
           locationId,
           startDate,
           endDate,
-          idempotencyKey: `${id.employeeId}-${Date.now()}`,
+          idempotencyKey: `${id.id}-${Date.now()}`,
         }),
       }, id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['requests', id.employeeId] });
-      qc.invalidateQueries({ queryKey: ['balance', id.employeeId] });
+      qc.invalidateQueries({ queryKey: ['requests', id.id] });
+      qc.invalidateQueries({ queryKey: ['balance', id.id] });
       setError(null);
     },
     onError: (e: any) => setError(e instanceof ApiError ? e.body?.detail ?? e.message : String(e)),
@@ -49,29 +65,34 @@ export default function EmployeePage() {
   const cancelMut = useMutation({
     mutationFn: (rid: string) => api(`/requests/${rid}/cancel`, { method: 'POST' }, id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['requests', id.employeeId] });
-      qc.invalidateQueries({ queryKey: ['balance', id.employeeId] });
+      qc.invalidateQueries({ queryKey: ['requests', id.id] });
+      qc.invalidateQueries({ queryKey: ['balance', id.id] });
     },
   });
 
-  if (id.role !== 'employee') {
-    return <p className="text-slate-600">Switch to an employee identity to use this page.</p>;
-  }
-
   return (
     <div className="space-y-6">
+      {meQ.data?.managerId && (
+        <div className="text-sm text-slate-600">
+          My manager:{' '}
+          <strong>
+            {managerQ.data?.name ?? `id: ${meQ.data.managerId.slice(0, 8)}…`}
+          </strong>
+        </div>
+      )}
+
       <section>
         <h2 className="text-lg font-semibold mb-2">My balance</h2>
         {balQ.isLoading && <p className="text-sm text-slate-500">Loading…</p>}
         {(balQ.error || (balQ.data && balQ.data.length === 0)) && (
           <div className="bg-amber-50 border border-amber-200 rounded-md p-4 text-sm text-amber-900 space-y-2">
-            <p><strong>No balance yet for {id.employeeId}.</strong></p>
+            <p><strong>No balance yet for {id.name}.</strong></p>
             <p>
               Balances live in the HCM system (the "source of truth"). To bootstrap demo data:
             </p>
             <ol className="list-decimal list-inside text-xs space-y-1">
-              <li>Switch to <strong>Admin</strong> in the top-right dropdown</li>
-              <li>Click <strong>"Run one-click demo setup"</strong> (seeds e1 with 10 days + e2 with 15 days)</li>
+              <li>Log in as <strong>Admin</strong></li>
+              <li>Click <strong>"Run one-click demo setup"</strong> (seeds all employees with 10 days)</li>
               <li>Switch back to this page — the balance will appear</li>
             </ol>
           </div>

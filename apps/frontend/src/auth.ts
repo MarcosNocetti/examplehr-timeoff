@@ -1,63 +1,55 @@
 import { useSyncExternalStore } from 'react';
 
-export type Identity = { employeeId: string; role: 'employee' | 'manager' | 'admin' };
+export type Role = 'employee' | 'manager' | 'admin';
 
-const KEY = 'examplehr-identity';
+export interface Identity {
+  id: string;
+  name: string;
+  role: Role;
+}
 
-const DEFAULT: Identity = { employeeId: 'e1', role: 'employee' };
+const KEY = 'examplehr-identity-v2';  // bump key so old single-string identities are flushed
 
 let listeners: Array<() => void> = [];
-
-// Cache the last parsed Identity + the raw JSON it came from.
-// useSyncExternalStore's getSnapshot MUST return a stable reference when
-// nothing has changed (it uses Object.is to detect change). Parsing JSON
-// on every render returns a new object each time, which makes React think
-// the state changed and triggers an infinite re-render loop (error #185).
 let cachedRaw: string | null = null;
-let cachedIdentity: Identity = DEFAULT;
+let cachedIdentity: Identity | null = null;
 
-function read(): Identity {
+function read(): Identity | null {
   let raw: string | null = null;
-  try {
-    raw = localStorage.getItem(KEY);
-  } catch {
-    return DEFAULT;
-  }
+  try { raw = localStorage.getItem(KEY); } catch { return null; }
   if (raw === null) {
-    cachedRaw = null;
-    cachedIdentity = DEFAULT;
-    return DEFAULT;
+    cachedRaw = null; cachedIdentity = null; return null;
   }
   if (raw === cachedRaw) return cachedIdentity;
   try {
     cachedIdentity = JSON.parse(raw) as Identity;
     cachedRaw = raw;
   } catch {
-    cachedIdentity = DEFAULT;
-    cachedRaw = null;
+    cachedIdentity = null; cachedRaw = null;
   }
   return cachedIdentity;
 }
 
-function write(id: Identity) {
-  const raw = JSON.stringify(id);
-  localStorage.setItem(KEY, raw);
-  cachedRaw = raw;
-  cachedIdentity = id;
+function write(id: Identity | null) {
+  if (id === null) {
+    try { localStorage.removeItem(KEY); } catch {}
+    cachedRaw = null; cachedIdentity = null;
+  } else {
+    const raw = JSON.stringify(id);
+    try { localStorage.setItem(KEY, raw); } catch {}
+    cachedRaw = raw; cachedIdentity = id;
+  }
   listeners.forEach((l) => l());
 }
 
-export function setIdentity(id: Identity) {
-  write(id);
-}
+export function setIdentity(id: Identity) { write(id); }
+export function logout() { write(null); }
 
 const subscribe = (cb: () => void) => {
   listeners.push(cb);
-  return () => {
-    listeners = listeners.filter((l) => l !== cb);
-  };
+  return () => { listeners = listeners.filter((l) => l !== cb); };
 };
 
-export function useIdentity(): Identity {
+export function useIdentity(): Identity | null {
   return useSyncExternalStore(subscribe, read);
 }

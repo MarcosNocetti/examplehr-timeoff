@@ -11,16 +11,16 @@ export class ApiError extends Error {
   }
 }
 
-export async function api<T>(path: string, init: RequestInit = {}, id: Identity): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    ...init,
-    headers: {
-      'content-type': 'application/json',
-      'x-employee-id': id.employeeId,
-      'x-role': id.role,
-      ...(init.headers ?? {}),
-    },
-  });
+export async function api<T>(path: string, init: RequestInit = {}, id: Identity | null = null): Promise<T> {
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+    ...(init.headers as Record<string, string> ?? {}),
+  };
+  if (id) {
+    headers['x-employee-id'] = id.id;
+    headers['x-role'] = id.role;
+  }
+  const res = await fetch(`${BASE}${path}`, { ...init, headers });
   if (res.status === 204) return undefined as T;
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError(res.status, body);

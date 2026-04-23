@@ -16,19 +16,56 @@ async function hcmAdmin(path: string, body: any) {
   if (!res.ok) throw new Error(`HCM admin ${res.status}`);
 }
 
+interface Employee { id: string; name: string; email: string; role: string; managerId: string | null; createdAt: string; }
+
 export default function AdminPage() {
-  const id = useIdentity();
+  const id = useIdentity()!;
   const qc = useQueryClient();
 
-  const [seedEmp, setSeedEmp] = useState('e1');
+  const [seedEmp, setSeedEmp] = useState('');
   const [seedLoc, setSeedLoc] = useState('l1');
   const [seedTotal, setSeedTotal] = useState('10');
 
-  const [rtEmp, setRtEmp] = useState('e1');
+  const [rtEmp, setRtEmp] = useState('');
   const [rtLoc, setRtLoc] = useState('l1');
   const [rtTotal, setRtTotal] = useState('10');
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Employee CRUD state
+  const [newName, setNewName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newRole, setNewRole] = useState<'employee' | 'manager' | 'admin'>('employee');
+  const [newManager, setNewManager] = useState<string>('');
+
+  const empListQ = useQuery({
+    queryKey: ['employees', 'all'],
+    queryFn: () => api<Employee[]>('/employees', {}, id),
+  });
+
+  const createEmpMut = useMutation({
+    mutationFn: () =>
+      api<Employee>('/employees', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: newName,
+          email: newEmail,
+          role: newRole,
+          managerId: newManager || null,
+        }),
+      }, id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['employees'] });
+      setNewName(''); setNewEmail(''); setNewRole('employee'); setNewManager('');
+      setErrorMsg(null);
+    },
+    onError: (e: any) => setErrorMsg(e instanceof ApiError ? e.body?.detail ?? e.message : String(e)),
+  });
+
+  const deleteEmpMut = useMutation({
+    mutationFn: (eid: string) => api(`/employees/${eid}`, { method: 'DELETE' }, id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['employees'] }),
+  });
 
   const seedMut = useMutation({
     mutationFn: async () => {
@@ -59,7 +96,6 @@ export default function AdminPage() {
   const reqQ = useQuery({
     queryKey: ['requests', 'all'],
     queryFn: () => api<any[]>(`/requests`, {}, id),
-    enabled: id.role === 'admin',
     refetchInterval: 2000,
   });
 
@@ -69,23 +105,21 @@ export default function AdminPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['requests'] }),
   });
 
-  // Convenience: seed HCM AND push to API for two demo employees with one click.
+  // Convenience: seed HCM AND push to API for all employees with role=employee.
   const oneClickMut = useMutation({
     mutationFn: async () => {
-      const setup = async (employeeId: string, totalDays: string) => {
-        await hcmAdmin('/_admin/seed', { employeeId, locationId: 'l1', totalDays });
+      const all = await api<Employee[]>('/employees', {}, id);
+      const employees = all.filter((e) => e.role === 'employee');
+      for (const emp of employees) {
+        await hcmAdmin('/_admin/seed', { employeeId: emp.id, locationId: 'l1', totalDays: '10' });
         await api('/hcm-webhook/realtime', {
           method: 'POST',
           body: JSON.stringify({
-            employeeId,
-            locationId: 'l1',
-            newTotal: totalDays,
+            employeeId: emp.id, locationId: 'l1', newTotal: '10',
             hcmTimestamp: new Date().toISOString(),
           }),
         }, id);
-      };
-      await setup('e1', '10');
-      await setup('e2', '15');
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['balance'] });
@@ -94,24 +128,13 @@ export default function AdminPage() {
     onError: (e: any) => setErrorMsg(e instanceof ApiError ? e.body?.detail ?? e.message : String(e)),
   });
 
-  if (id.role !== 'admin') {
-    return (
-      <div className="bg-amber-50 border border-amber-200 rounded-md p-4">
-        <p className="text-sm text-amber-900">
-          Switch to <strong>Admin</strong> in the top-right dropdown to use this page.
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       <section>
         <div className="bg-emerald-50 border border-emerald-200 rounded-md p-4">
           <h3 className="text-sm font-semibold text-emerald-900 mb-1">Quick demo setup</h3>
           <p className="text-xs text-emerald-800 mb-3">
-            Seeds HCM + pushes balances to the API for <code className="bg-emerald-100 px-1 rounded">e1</code> (10 days)
-            and <code className="bg-emerald-100 px-1 rounded">e2</code> (15 days). Then switch to the Employee page.
+            Seeds 10 days for every employee in the directory. Then any of them can log in and create requests.
           </p>
           <button
             onClick={() => oneClickMut.mutate()}
@@ -121,9 +144,58 @@ export default function AdminPage() {
             {oneClickMut.isPending ? 'Setting up…' : 'Run one-click demo setup'}
           </button>
           {oneClickMut.isSuccess && (
-            <p className="text-xs text-emerald-700 mt-2">✓ Done. Switch to Employee (e1 or e2) to see balances.</p>
+            <p className="text-xs text-emerald-700 mt-2">Done. Log in as any employee to see their balance.</p>
           )}
         </div>
+      </section>
+
+      <section>
+        <h2 className="text-lg font-semibold mb-2">Employees</h2>
+        <p className="text-xs text-slate-500 mb-2">Create employees, set their role, and link to a manager.</p>
+
+        <form
+          onSubmit={(e) => { e.preventDefault(); createEmpMut.mutate(); }}
+          className="bg-white border border-slate-200 rounded-md p-4 grid grid-cols-1 sm:grid-cols-5 gap-3 items-end mb-4"
+        >
+          <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Name" required className="border border-slate-300 rounded px-2 py-1 text-sm" />
+          <input value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="email@co.dev" required type="email" className="border border-slate-300 rounded px-2 py-1 text-sm" />
+          <select value={newRole} onChange={(e) => setNewRole(e.target.value as any)} className="border border-slate-300 rounded px-2 py-1 text-sm">
+            <option value="employee">employee</option>
+            <option value="manager">manager</option>
+            <option value="admin">admin</option>
+          </select>
+          <select value={newManager} onChange={(e) => setNewManager(e.target.value)} className="border border-slate-300 rounded px-2 py-1 text-sm">
+            <option value="">(no manager)</option>
+            {empListQ.data?.filter((e) => e.role === 'manager' || e.role === 'admin').map((m) => (
+              <option key={m.id} value={m.id}>{m.name} ({m.role})</option>
+            ))}
+          </select>
+          <button type="submit" disabled={createEmpMut.isPending} className="bg-slate-900 text-white text-sm px-4 py-2 rounded-md disabled:opacity-50">
+            {createEmpMut.isPending ? '…' : 'Create'}
+          </button>
+        </form>
+
+        {empListQ.data && (
+          <ul className="space-y-2">
+            {empListQ.data.map((e) => {
+              const mgr = empListQ.data?.find((x) => x.id === e.managerId);
+              return (
+                <li key={e.id} className="bg-white border border-slate-200 rounded-md p-3 flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-medium text-slate-900">{e.name} <span className="text-xs text-slate-400">{e.role}</span></div>
+                    <div className="text-xs text-slate-500">{e.email}{mgr ? ` · reports to ${mgr.name}` : ''}</div>
+                  </div>
+                  <button
+                    onClick={() => { if (confirm(`Delete ${e.name}?`)) deleteEmpMut.mutate(e.id); }}
+                    className="text-xs text-rose-700 hover:underline"
+                  >
+                    Delete
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </section>
 
       <section>
