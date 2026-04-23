@@ -15,11 +15,10 @@ services:
     environment:
       PORT: "4000"
     ports: ["4000:4000"]
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:4000/hcm/balances/_/_", "||", "true"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
+    # No healthcheck — the mock's GET endpoints return 404 for unknown
+    # employeeIds which makes a simple wget healthcheck report "unhealthy".
+    # Services that depend on hcm-mock use `condition: service_started`
+    # which only requires the container to be running, not healthy.
 
   api:
     build:
